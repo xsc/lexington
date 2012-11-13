@@ -1,14 +1,19 @@
-(ns ^{ :doc "Lexington Lexer Implementation.
-             A lexer is a function that takes a sequence of input entities
-             (e.g. characters) and produces a sequence of tokens."
+(ns ^{ :doc "Lexington Lexer Implementation."
        :author "Yannick Scherer" }
   lexington.lexer
   (:use lexington.tokens
         lexington.token-readers))
 
-;; ---------------------------------------------------------------------
-;; General Lexer Structure
-;; ---------------------------------------------------------------------
+;; ## Lexers
+;;
+;; A lexer is a function that takes a sequence of input entities (e.g. characters) and produces a 
+;; sequence of tokens. 
+;;
+;; ## Lexer Helpers
+;;
+;; Since the `lexer` macro basically just creates a series of trial-and-error token reader
+;; functions, these helpers handle the actual application of those functions.
+
 (defn- run-token-readers
   "Run a sequence of token readers in order until one produces a non-nil value."
   [token-readers s]
@@ -37,25 +42,37 @@
         (cond token-count (take token-count rsq)
               :else rsq)))))
 
-;; ---------------------------------------------------------------------
-;; Lexer Macro
-;; ---------------------------------------------------------------------
+;; ## Lexer Macro
+;;
+;; Lexers can be created using the `lexer` and `deflexer` macros which associate token types with 
+;; a description of how and when to produce the corresponding token value. There a several possible formats
+;; for these _matching instructions_:
+;;
+;; - a string literal to expect at the beginning of the input
+;; - a regular expression to match against the start of the input
+;; - a function returning the number of input sequence elements it matched (or nil)
+;; - etc ...
+;;
+;; All these things will be passed to `lexington.token-matchers/create-matcher` to produce the matching function 
+;; to be used.
+;; 
+;;     (deflexer simple-math
+;;       :integer #"[1-9][0-9]*"
+;;       :plus    "+"
+;;       :minus   #(when (= (first %) \-) 1))
+;;
+;; It is possible to use certain directives inside of a lexer, e.g. `:include`:
+;;
+;;     (deflexer more-math
+;;       (:include simple-math)
+;;       :mul "*"
+;;       :div "/")
+;;
+;; Custom Directives can be introduced by implementing the multimethod `lexington.token-readers/directive->token-reader`.
+
+
 (defmacro lexer
-  "Create a new Lexer using a series of token-type/matcher pairs.
-   A matcher can be given as:
-   - a string literal to match
-   - a regular expression to match
-   - a matcher function
-   Example:
-
-     (lexer
-       :int #\"[1-9][0-9]+\"
-       :+   \"+\"
-       :-   \"-\"
-       (:include ignore-whitespace))
-
-   You can include existing lexers using the :include directive.
-  "
+  "Create a new Lexer using a series of token-type/matcher pairs."
   [& rules]
   `(let [token-readers# ~(create-token-readers rules)]
      (lexer-fn token-readers#)))

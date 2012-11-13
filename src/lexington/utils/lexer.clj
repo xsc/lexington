@@ -3,9 +3,8 @@
   lexington.utils.lexer
   (:use lexington.tokens))
 
-;; ------------------------------------------------------------------------
-;; Helpers
-;; ------------------------------------------------------------------------
+;; ## Transformation Helpers
+
 (defn- transform-tokens
   "Add a token transformation to a Lexer. The optional third parameter
    can be a predicate determining whether a token shall be transformed."
@@ -34,15 +33,14 @@
                (comp not check-except? token-type))
       :else nil)))
 
-;; ------------------------------------------------------------------------
-;; General Wrappers
-;; ------------------------------------------------------------------------
+;; ## Lexer Wrappers
+
 (defn discard
   "Wrap a Lexer into a function removing tokens corresponding to a given number of
    token types. Example:
   
-   (-> lexer
-     (discard :whitespace :comment))
+     (-> lexer
+       (discard :whitespace :comment))
   "
   [lex & types-to-discard]
   (let [type-set (set types-to-discard)]
@@ -52,8 +50,8 @@
   "Wrap a Lexer into a function discarding all tokens except those corresponding to a
    given number of token types. Example:
 
-   (-> lexer
-     (retain :comment))
+     (-> lexer
+       (retain :comment))
   "
   [lex & types-to-retain]
   (let [type-set (set types-to-retain)]
@@ -63,14 +61,14 @@
   "Wrap a Lexer into a function adding a field containing a token's string value to
    the token map. Example:
 
-   (-> lexer
-     (with-string :str))
+     (-> lexer
+       (with-string :str))
 
    It's possible to specify exceptions for this operation or to narrow it down to a
    specific set of types:
 
-   (-> lexer (with-string :str :except [:boolean]))
-   (-> lexer (with-string :str :only [:string]))
+     (-> lexer (with-string :str :except [:boolean]))
+     (-> lexer (with-string :str :only [:string]))
   "
   [lex k & {:keys[except only] :as spec}]
   (letfn [(add-string-field [token]
@@ -81,9 +79,8 @@
   "Wrap a Lexer into a function adding a field containing a token's integer value to
    the token map. Example:
 
-   (-> lexer
-     (with-string :str)
-     (with-int :int :only [:integer]))
+     (-> lexer
+       (with-int :int :only [:integer]))
   "
   [lex k & {:keys[except only] :as spec}]
   (letfn [(add-int-field [token]
@@ -95,17 +92,18 @@
    handler functions can return a value that will end up in the token map using the
    given handler-key. Example:
     
-   (-> lexer
-     (with-string :str)
-     (generate :num-value
-       :integer #(Integer/parseInt (:str %))
-       :float   #(Double/parseDouble (:str %))))
+     (-> lexer
+       (with-string :str)
+       (generate :num-value
+         :integer #(Integer/parseInt (:str %))
+         :float   #(Double/parseDouble (:str %))))
   "
   [lex handler-key & handlers]
   (let [handler-map (apply hash-map handlers)]
     (letfn [(process-token [token]
               (let [type (token-type token)]
-                (if-let [handler-result (when-let [h (get handler-map type)] (h token))]
+                (if-let [handler-result (when-let [h (get handler-map type)] 
+                                          (h token))]
                   (assoc token handler-key handler-result)
                   token)))]
       #(->> (lex %) (map process-token)))))
@@ -115,12 +113,12 @@
    producing additional entries in the token map based on the given key/handler pairs.
    Example:
 
-   (-> lexer
-     (with-string :str)
-     (generate-for :integer
-       :int #(Integer/parseInt (:str %))
-       :sqrt #(Math/sqrt (:int %))
-       :half #(/ (:int %) 2)))
+     (-> lexer
+       (with-string :str)
+       (generate-for :integer
+         :int #(Integer/parseInt (:str %))
+         :sqrt #(Math/sqrt (:int %))
+         :half #(/ (:int %) 2)))
   "
   [lex tk-types & handlers]
   (let [handler-pairs (partition 2 handlers)
@@ -136,9 +134,8 @@
                   token)))]
       #(->> (lex %) (map process-token)))))
 
-;; ------------------------------------------------------------------------
-;; Stateful Wrappers
-;; ------------------------------------------------------------------------
+;; ## Stateful Lexer Wrappers
+
 (defn- build-stateful-handler-map
   "Convert a sequence of stateful handler specifications (e.g. keyword/map or 
    keyword/function pairs) to its corresponding map representation, containing
@@ -169,11 +166,11 @@
    token types. The value created by said operations will be stored in the token
    map using the given handler-key. Example:
   
-   (-> lexer
-     (with-int :int :only [:integer :float])
-     (generate-stateful :int-sum 0.0
-       :integer #(+ (:int %1) %2)
-       :float   #(+ (:int %1) %2)))
+     (-> lexer
+       (with-int :int :only [:integer :float])
+       (generate-stateful :int-sum 0.0
+         :integer #(+ (:int %1) %2)
+         :float   #(+ (:int %1) %2)))
   "
   [lex handler-key initial-state & handlers]
   (let [handler-map (build-stateful-handler-map handlers)]
