@@ -4,11 +4,11 @@
 
 (defn new-token
   "Create new Token based on a token type and an optional data sequence."
-  ([type] (new-token type nil))
-  ([type data] 
-   (-> {}
-     (assoc ::type type)
-     (assoc ::data data))))
+  [type data] 
+  (-> {}
+    (assoc ::type type)
+    (assoc ::data data)
+    (assoc ::length (count data))))
 
 (defn token-type
   "Get a Token's type."
@@ -19,3 +19,8 @@
   "Get a Token's data sequence."
   [token]
   (::data token))
+
+(defn token-length
+  "Get a Token's data length."
+  [token]
+  (::length token))
