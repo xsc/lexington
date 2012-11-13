@@ -35,7 +35,7 @@ Matching instruction include:
 * strings
 * a matching function (returning the number of input entities that match it)
 
-This list can be extended by implementing the multi-method ``lexington.token-matchers/create-matcher``.
+This list can be extended by implementing the multi-method ``lexington.token-matchers/matcher-for``.
 
 Lexers can include and extend other lexers:
 ```clojure
