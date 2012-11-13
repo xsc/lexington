@@ -37,10 +37,10 @@
   [rules]
   (lazy-seq
     (when (seq rules)
-      (let [[f & _] rules]
+      (let [[f & rst] rules]
         (if (coll? f) 
-          (cons f (normalize-rules (rest rules)))
-          (cons (cons :token (take 2 rules)) (normalize-rules (drop 2 rules))))))))
+          (cons f (normalize-rules rst))
+          (cons (cons :token (take 2 rules)) (normalize-rules (rest rst))))))))
 
 (defn create-token-readers
   "Create sequence of token reader functions."
