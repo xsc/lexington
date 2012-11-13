@@ -1,6 +1,6 @@
 (ns ^{ :doc "Lexer Utilities, e.g. for Token Processing/Transformation."
        :author "Yannick Scherer" }
-  lexington.lexer-utils
+  lexington.utils.lexer
   (:use lexington.tokens))
 
 ;; ------------------------------------------------------------------------
