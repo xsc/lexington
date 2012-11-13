@@ -34,6 +34,7 @@ Matching instruction include:
 * regular expressions
 * strings
 * a matching function (returning the number of input entities that match it)
+
 This list can be extended by implementing the multi-method ``lexington.token-matchers/create-matcher``.
 
 Lexers can include and extend other lexers:
