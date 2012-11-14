@@ -39,10 +39,12 @@
 
 (defmethod matcher-for java.util.regex.Pattern
   [p]
-  (let [re (re-pattern (str "^" p))]
+  (let [re (re-pattern (str "^(" p ")"))]
     (fn [in-seq]
       (when-let [r (re-find re (apply str in-seq))]
-        (count r)))))
+        (if (coll? r)
+          (count (first r))
+          (count r))))))
 
 (defmethod matcher-for clojure.lang.IFn
   [f]
