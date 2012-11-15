@@ -24,12 +24,12 @@
   "Add a type-based token transformation to a Lexer. The third parameter is a map
    containg the key :only or :except to specify which types the transformation shall
    be applied to."
-  [lex f { :keys [only except] }]
+  [lex f { :keys [only exclude] }]
   (transform-tokens lex f
     (cond
       only (let [check-only? (if (coll? only) (set only) #(= % only))]
              (comp check-only? token-type))
-      except (let [check-except? (if (coll? except) (set except) #(= % except))]
+      exclude (let [check-except? (if (coll? exclude) (set exclude) #(= % exclude))]
                (comp not check-except? token-type))
       :else nil)))
 
@@ -67,10 +67,10 @@
    It's possible to specify exceptions for this operation or to narrow it down to a
    specific set of types:
 
-     (-> lexer (with-string :str :except [:boolean]))
+     (-> lexer (with-string :str :exclude [:boolean]))
      (-> lexer (with-string :str :only [:string]))
   "
-  [lex k & {:keys[except only] :as spec}]
+  [lex k & {:keys[exclude only] :as spec}]
   (letfn [(add-string-field [token]
             (assoc token k (apply str (token-data token))))]
     (transform-tokens-by-type lex add-string-field spec)))
@@ -82,7 +82,7 @@
      (-> lexer
        (with-int :int :only [:integer]))
   "
-  [lex k & {:keys[except only] :as spec}]
+  [lex k & {:keys[exclude only] :as spec}]
   (letfn [(add-int-field [token]
             (assoc token k (Integer/parseInt (apply str (token-data token)))))]
     (transform-tokens-by-type lex add-int-field spec)))
