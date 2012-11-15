@@ -50,7 +50,7 @@
       (test-generator (-> lex (with-int :int :exclude [:lower-word :upper-word]))
         phrase :int [nil nil nil nil nil nil 7 nil]))
 
-    (testing "Custom Stateless Generators"
+    (testing "Stateless Generators"
       (testing "generate-for"
         (test-generator (-> lex
                           (retain :number)
@@ -78,4 +78,29 @@
                             [:lower-word :upper-word] (constantly :word)
                             :number (constantly :num)))
           phrase :classification  [:word :word :word :word :word :word :num :word])))
+
+    (testing "Stateful Generators"
+      (test-generator (-> lex 
+                        (retain :number)
+                        (with-int :int)
+                        (generate-stateful :sum-so-far 0
+                          :number #(+ (:int %1) %2))
+                        (generate-stateful :product-so-far 1
+                          :number #(* (:int %1) %2)))
+        "1 2 3" #(vector (:sum-so-far %) (:product-so-far %)) [[1 1] [3 2] [6 6]])
+      (test-generator (-> lex
+                        (retain :number)
+                        (with-int :int)
+                        (generate-stateful :previous-number nil
+                          :number { :handle (fn [_ n] n)
+                                    :after (fn [n _] (:int n)) }))
+        "1 2 3" :previous-number [nil 1 2])
+      (test-generator (-> lex
+                        (discard :number)
+                        (with-string :str)
+                        (generate-stateful :previous-word nil
+                          [:lower-word :upper-word] { :handle (fn [_ n] n)
+                                                      :after (fn [n _] (:str n)) }))
+        phrase :previous-word [nil "get" "the" "STRING" "value" "of" "these"])
+    )
 ))
