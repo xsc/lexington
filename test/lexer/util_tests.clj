@@ -72,5 +72,10 @@
                             :lower-word (constantly :word)
                             :upper-word (constantly :word)
                             :number     (constantly :num)))
-          phrase :classification [:word :word :word :word :word :word :num :word])))
+          phrase :classification [:word :word :word :word :word :word :num :word])
+        (test-generator (-> lex
+                          (generate :classification
+                            [:lower-word :upper-word] (constantly :word)
+                            :number (constantly :num)))
+          phrase :classification  [:word :word :word :word :word :word :num :word])))
 ))
