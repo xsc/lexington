@@ -35,6 +35,8 @@
 
 ;; ## Lexer Wrappers
 
+;; ### Token Filters
+
 (defn discard
   "Wrap a Lexer into a function removing tokens corresponding to a given number of
    token types. Example:
@@ -56,6 +58,8 @@
   [lex & types-to-retain]
   (let [type-set (set types-to-retain)]
     #(->> (lex %) (filter (comp type-set token-type)))))
+
+;; ### Predefined Data Generators
 
 (defn with-string
   "Wrap a Lexer into a function adding a field containing a token's string value to
@@ -87,6 +91,19 @@
             (assoc token k (Integer/parseInt (apply str (token-data token)))))]
     (transform-tokens-by-type lex add-int-field spec)))
 
+;; ### Stateless Data Generators
+
+(defn- build-stateless-handler-map
+  "Convert a list of token-type(s)/handler pairs into a handler map usable by `generate`
+   or `generate-stateful`."
+  [handlers]
+  (reduce (fn [m [types f]]
+            (if (coll? types)
+              (reduce #(assoc %1 %2 f) m types)
+              (assoc m types f)))
+          {}
+          (partition 2 handlers)))
+
 (defn generate
   "Wrap a Lexer into a function handling tokens when they are encountered. The given
    handler functions can return a value that will end up in the token map using the
@@ -99,13 +116,7 @@
          [:float :real] #(Double/parseDouble (:str %))))
   "
   [lex handler-key & handlers]
-  (let [handler-map (reduce 
-                      (fn [m [types f]]
-                        (if (coll? types)
-                          (reduce #(assoc %1 %2 f) m types)
-                          (assoc m types f)))
-                      {}
-                      (partition 2 handlers))]
+  (let [handler-map (build-stateless-handler-map handlers)]
     (letfn [(process-token [token]
               (let [type (token-type token)]
                 (if-let [handler-result (when-let [h (get handler-map type)] 
@@ -140,7 +151,7 @@
                   token)))]
       #(->> (lex %) (map process-token)))))
 
-;; ## Stateful Lexer Wrappers
+;; ### Stateful Data Generators
 
 (defn- build-stateful-handler-map
   "Convert a sequence of stateful handler specifications (e.g. keyword/map or 
@@ -148,24 +159,19 @@
    the keys :before, :handle and :after."
   [handlers]
   (reduce
-    (fn [m [type handler]]
-      (assoc m type
-        (cond (map? handler) (let [{:keys[before handle after]} handler]
-                               (when handle
-                                 (if-not (or before after)
-                                   (assoc handler :after handle)
-                                   handler)))
-              (fn? handler) { :handle handler :after handler }
-              :else nil)))
+    (fn [m [types handler]]
+      (let [h (cond (map? handler) (let [{:keys[before handle after]} handler]
+                                     (when handle
+                                       (if-not (or before after)
+                                         (assoc handler :after handle)
+                                         handler)))
+                    (fn? handler) { :handle handler :after handler }
+                    :else nil)]
+        (if (coll? types)
+          (reduce #(assoc %1 %2 h) m types)
+          (assoc m types h))))
     {}
     (partition 2 handlers)))
-
-(defn- transform-state 
-  "Transform the given state based on token and type of transformation."
-  [handler k token state]
-  (if-let [h (get handler k)]
-    (h token state)
-    state))
 
 (defn generate-stateful
   "Wrap a Lexer into a function performing stateful operations on selected
