@@ -48,8 +48,29 @@
       (test-generator (-> lex (with-int :int :only [:number]))
         phrase :int [nil nil nil nil nil nil 7 nil])
       (test-generator (-> lex (with-int :int :exclude [:lower-word :upper-word]))
-        phrase :int [nil nil nil nil nil nil 7 nil]))))
+        phrase :int [nil nil nil nil nil nil 7 nil]))
 
-
-
-
+    (testing "Custom Stateless Generators"
+      (testing "generate-for"
+        (test-generator (-> lex
+                          (retain :number)
+                          (with-int :int :only [:number])
+                          (generate-for :number
+                            :sqrt (comp #(Math/sqrt %) :int)
+                            :half (comp double #(/ % 2) :int)))
+          "1 4 9" #(vector (:sqrt %) (:half %)) [[1.0 0.5] [2.0 2.0] [3.0 4.5]])
+        (test-generator (-> lex 
+                          (discard :number)
+                          (generate-for [:lower-word :upper-word]
+                            :str        #(.toLowerCase (apply str (token-data %)))
+                            :vowels     (comp count #(filter #{\a \e \i \o \u} %) :str)
+                            :consonants (comp count #(filter (comp not #{\a \e \i \o \u}) %) :str)))
+          phrase #(vector (:vowels %) (:consonants %)) [[1 2] [1 2] [1 5] [3 2] [1 1] [2 3] [1 4]]))
+      (testing "generate"
+        (test-generator (-> lex
+                          (generate :classification
+                            :lower-word (constantly :word)
+                            :upper-word (constantly :word)
+                            :number     (constantly :num)))
+          phrase :classification [:word :word :word :word :word :word :num :word])))
+))
