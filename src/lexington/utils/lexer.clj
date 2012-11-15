@@ -95,11 +95,17 @@
      (-> lexer
        (with-string :str)
        (generate :num-value
-         :integer #(Integer/parseInt (:str %))
-         :float   #(Double/parseDouble (:str %))))
+         :integer       #(Integer/parseInt (:str %))
+         [:float :real] #(Double/parseDouble (:str %))))
   "
   [lex handler-key & handlers]
-  (let [handler-map (apply hash-map handlers)]
+  (let [handler-map (reduce 
+                      (fn [m [types f]]
+                        (if (coll? types)
+                          (reduce #(assoc %1 %2 f) m types)
+                          (assoc m types f)))
+                      {}
+                      (partition 2 handlers))]
     (letfn [(process-token [token]
               (let [type (token-type token)]
                 (if-let [handler-result (when-let [h (get handler-map type)] 
