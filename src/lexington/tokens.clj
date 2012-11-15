@@ -7,7 +7,7 @@
   [type data] 
   (-> {}
     (assoc ::type type)
-    (assoc ::data data)
+    (assoc ::data (seq data))
     (assoc ::length (count data))))
 
 (defn token-type
