@@ -1,4 +1,4 @@
-(ns lexer.basic-tests
+(ns lexington.lexer.basic-tests
   (:use lexington.lexer
         lexington.tokens
         clojure.test))

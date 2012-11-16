@@ -1,4 +1,4 @@
-(ns lexer.util-tests
+(ns lexington.lexer.util-tests
   (:use lexington.lexer
         lexington.tokens
         lexington.utils.lexer
