@@ -1,11 +1,11 @@
-(ns ^{ :doc "Token Matcher Functions."
+(ns ^{ :doc "Seq Matcher Utilities."
        :author "Yannick Scherer" }
-  lexington.token-matchers)
+  lexington.seq-matchers)
 
 ;; ## Protocol `Matchable`
 
 (defprotocol Matchable
-  "Protocol implemented by entities that can be used to generate token matcher 
+  "Protocol implemented by entities that can be used to generate seq matcher 
    functions"
   (matcher-for [x]
     "Create function that matches a seq against the given entity. A matcher function 

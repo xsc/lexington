@@ -2,7 +2,7 @@
        :author "Yannick Scherer" }
   lexington.token-readers
   (:use lexington.tokens
-        lexington.token-matchers))
+        lexington.seq-matchers))
 
 ;; ---------------------------------------------------------------
 ;; Handlers for Directives
