@@ -2,12 +2,17 @@
        :author "Yannick Scherer" }
   lexington.token-matchers)
 
-;; ## Token Matcher Concept
+;; ## Protocol `Matchable`
 
-(defmulti matcher-for
-  "Multimethod to create a matcher function based on a given literal. A matcher
-   function returns the number of input entities matching it; nil otherwise."
-  (fn [x] (class x)))
+(defprotocol Matchable
+  "Protocol implemented by entities that can be used to generate token matcher 
+   functions"
+  (matcher-for [x]
+    "Create function that matches a seq against the given entity. A matcher function 
+     returns either nil (if no match was found) or the number of seq elements it
+     matches (might be zero)."))
+
+;; ## Matcher Generation
 
 (defn- wrap-matcher
   "Wrap a function to fulfill the token matcher function contract (return a positive
@@ -25,35 +30,32 @@
   (when-let [f (matcher-for v)]
     (wrap-matcher f)))
 
-;; ## Token Matchers
+;; ## Predefined Matchers
 
-(defmethod matcher-for java.lang.String
-  [s]
-  (when-let [sq (seq s)]
-    (let [c (count sq)]
+(extend-protocol Matchable
+ 
+  clojure.lang.IFn
+  (matcher-for [f]
+    (wrap-matcher f))
+
+  java.lang.String
+  (matcher-for [s]
+    (if-let [sq (seq s)]
+      (let [c (count sq)]
+        (fn [in-seq]
+          (when-let [isq (seq in-seq)]
+            (let [msq (take c isq)]
+              (when (= msq sq)
+                c)))))
+      (constantly 0)))
+
+  java.util.regex.Pattern
+  (matcher-for [p]
+    (let [re (re-pattern (str "^(" p ")"))]
       (fn [in-seq]
-        (when-let [isq (seq in-seq)]
-          (let [msq (take c isq)]
-            (when (= msq sq)
-              c)))))))
+        (when-let [r (re-find re (apply str in-seq))]
+          (if (coll? r)
+            (count (first r))
+            (count r))))))
 
-(defmethod matcher-for java.util.regex.Pattern
-  [p]
-  (let [re (re-pattern (str "^(" p ")"))]
-    (fn [in-seq]
-      (when-let [r (re-find re (apply str in-seq))]
-        (if (coll? r)
-          (count (first r))
-          (count r))))))
-
-(defmethod matcher-for clojure.lang.IFn
-  [f]
-  f)
-
-(defmethod matcher-for java.lang.Object
-  [o]
-  (fn [in-seq]
-    (when-let [sq (seq in-seq)]
-      (when (= (first sq) o)
-        1))))
-
+  )
