@@ -1,11 +1,11 @@
 lexington
 =========
 
+[![Build Status of Master](https://travis-ci.org/xsc/lexington.png?branch=master)](https://travis-ci.org/xsc/lexington)
+
 lexington is aimed at simplifying the creation of extensible and combinable lexers. Written in Clojure it offers a
 customizable infrastructure and (so far) some predefined helper utilities. Still a work in progress, I hope it provides
 at least a little bit of usefulness - and if not that, perhaps a light chuckle?
-
-[![Build Status of Master](https://travis-ci.org/xsc/lexington.png?branch=master)](https://travis-ci.org/xsc/lexington)
 
 ## Lexer
 A lexer is just a function consuming a sequence of input entities (e.g. characters) and producing a sequence of tokens 
@@ -72,3 +72,16 @@ Since Clojure supports the generation of Clojure code at compile-time (via macro
 some kind of grammar DSL and means to transform it into parser code, without the hassle of the usual 
 "edit grammar"-"regenerate code"-"compile it"-cycle. This is actually what got this project started since a parser
 without a usable lexer is only half the fun. Where this aspect of the project goes remains to be seen.
+
+## Documentation (Marginalia)
+You can generate [Marginalia](https://github.com/fogus/marginalia) documentation for this project by adding 
+`lein-marginalia` to you `:user` profile in ~/.lein/profiles.clj, e.g.:
+```clojure
+{ :user { :plugins [ ... [lein-marginalia "0.7.1"] ...] } }
+```
+Then call:
+
+    lein marg -d doc/html 
+
+and direct your browser to the file `doc/html/uberdoc.html` .
+
