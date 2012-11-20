@@ -4,6 +4,12 @@
   (:require [lexington.fsm.states :as s]
             [lexington.fsm.fsm :as fsm]))
 
+;; ## Preface
+;;
+;; It shall only be necessary to include this namespace into a project using FSMs. Thus,
+;; we create wrappers around certain functions from other namespaces, as well as macros
+;; that automatically resolve references to said functions.
+
 ;; ## Wrappers
 
 (defn state
@@ -25,3 +31,7 @@
   "Create new FSM map."
   [& states]
   (fsm/states->fsm states))
+
+;; ## Macros
+
+

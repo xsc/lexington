@@ -22,21 +22,29 @@
          generate-transitions)
 
 (defn states->fsm
-  "Generate FSM map representation from a list of states. The first element of the list is
-   used as the initial state."
-  [states]
-  (let [states*       (normalize-states states)
-        initial-state (s/state-name (first states*))
-        state-set     (s/state-names states*)
-        accept-states (s/state-names (filter s/accepting? states*))
-        reject-states (s/state-names (filter s/rejecting? states*))
-        transitions   (generate-transitions states*)]
-    (-> {}
-      (assoc :states state-set)
-      (assoc :initial initial-state)
-      (assoc :accept accept-states)
-      (assoc :reject reject-states)
-      (assoc :transitions transitions))))
+  "Add states to given FSM or create new FSM based on the given states. The first
+   element of the list is used as the initial state if none was given so far."
+  ([new-states] (states->fsm {} new-states))
+  ([{:keys[initial states accept reject transitions] :as fsm} new-states]
+   (let [states*       (normalize-states new-states)
+         initial*      (s/state-name (first states*))
+         state-set     (s/state-names states*)
+         accept*       (s/state-names (filter s/accepting? states*))
+         reject*       (s/state-names (filter s/rejecting? states*))
+         transitions*  (generate-transitions states*)]
+     (-> fsm
+       (assoc :initial (or initial initial*))
+       (assoc :states (set (into states state-set)))
+       (assoc :accept (set (into accept accept*)))
+       (assoc :reject (set (into reject reject*)))
+       (assoc :transitions (merge transitions transitions*))))))
+
+(defn ->fsm
+  "Add states to given FSM."
+  [fsm & states]
+  (states->fsm fsm states))
+
+;; ## Transition Table
 
 (defn- generate-transitions
   "Generate transition table from a list of states. The result will be a nested map
@@ -69,6 +77,16 @@
         n (str (name current-state) "-"  (name base) "-on-" input-str)]
       (keyword "lexington.fsm.states" n)))
 
+(defn- generate-acceptor-name
+  "Generate name for accepting state."
+  [current-state input]
+  (generate-state-name :accept current-state input))
+
+(defn- generate-rejector-name
+  "Generate name for rejecting state."
+  [current-state input]
+  (generate-state-name :reject current-state input))
+
 ;; ### Reference Resolvers
 
 (defn- resolve-continue
@@ -85,7 +103,7 @@
     (h/map-in :transitions
       (fn [input next-state]
         (if (s/acceptor? next-state)
-          (generate-state-name :accept name input)
+          (generate-acceptor-name name input)
           next-state)))))
 
 (defn- resolve-rejectors
@@ -95,7 +113,7 @@
     (h/map-in :transitions
       (fn [input next-state]
         (if (s/rejector? next-state)
-          (generate-state-name :reject name input)
+          (generate-rejector-name name input)
           next-state)))))
 
 ;; ### State Generators
@@ -106,7 +124,7 @@
   (filter (comp not nil?)
           (map (fn [[input next-state]]
                  (when (s/acceptor? next-state)
-                   (s/new-accept-state (generate-state-name :accept name input) [])))
+                   (s/new-accept-state (generate-acceptor-name name input) [])))
                transitions)))
 
 (defn- generate-rejectors
@@ -115,7 +133,7 @@
   (filter (comp not nil?)
           (map (fn [[input next-state]]
                  (when (s/rejector? next-state)
-                   (s/new-reject-state (generate-state-name :reject name input))))
+                   (s/new-reject-state (generate-rejector-name name input))))
                transitions)))
 
 ;; ### Normalization
