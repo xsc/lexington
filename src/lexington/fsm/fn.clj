@@ -33,34 +33,72 @@
 ;; ### fsm->count-fn
 ;;
 ;; Each FSM can be transformed into a counter function that returns the number of input entities it read
-;; until it ended up in an accepting state. Recognition can either be done greedy (as much as possible,
-;; return highest acceptor count) or non-greedy (default; return once you are in an accepting state)
+;; until it ended up in an accepting state.,
+
+(defn- fsm->greedy-count-fn
+  "Generate counter function that tries to accept the maximum number of input entities."
+  [{:keys[initial transitions accept reject]}]
+  (if (reject initial) 
+    (constantly nil)
+    (fn [input]
+      (loop [state initial
+             input (seq input)
+             counter 0
+             last-accept (and (accept initial) 0)]
+        (if-not (seq input)
+          (if (accept state)
+            counter
+            last-accept)
+          (let [n (next-state transitions state (first input))
+                counter (inc counter)]
+            (cond (reject n) last-accept
+                  (accept n) (recur n (rest input) counter counter)
+                  :else (recur n (rest input) counter last-accept))))))))
+
+(defn- fsm->non-greedy-count-fn
+  "Generate counter function that tries to accept the minimum number of input entities."
+  [{:keys[initial transitions accept reject]}]
+  (cond (reject initial) (constantly nil)
+        (accept initial) (constantly 0)
+        :else (fn [input]
+                (loop [state initial
+                       input (seq input)
+                       counter 0]
+                  (if-not (seq input)
+                    (when (accept state) counter)
+                    (let [n (next-state transitions state (first input))]
+                      (cond (reject n) nil
+                            (accept n) (inc counter)
+                            :else (recur n (rest input) (inc counter)))))))))
+
+(defn- fsm->total-count-fn
+  "Generate counter function that counts the times the FSM enters an accepting state."
+  [{:keys[initial transitions accept reject]}]
+  (if (reject initial)
+    (constantly nil)
+    (fn [input]
+      (loop [state initial
+             input (seq input)
+             counter (if (accept initial) 1 0)]
+        (if-not (seq input)
+          counter
+          (let [n (next-state transitions state (first input))]
+            (cond (reject n) counter
+                  (accept n) (recur n (rest input) (inc counter))
+                  :else (recur n (rest input) counter))))))))
 
 (defn fsm->count-fn
   "Generate a function from an FSM that returns either `nil` (if the FSM never enters an accepting state) or
    the number of input entities processed until an accepting state was reached. The two-argument variant
    of this functions takes a counting strategy as its first parameter, either `:greedy` (return the number of 
-   the last entered accepting state) or `:non-greedy`(return the number of the first entered accepting state)."
+   the last entered accepting state; this is the default), `:non-greedy` (return the number of the first 
+   entered accepting state) or `:total` (return the number of accepting states entered)."
   ([fsm] (fsm->count-fn :greedy fsm))
-  ([k {:keys[initial transitions accept reject]}]
-   (let [greedy? (= k :greedy)]
-     (if (and (not greedy?) (accept initial))
-       (constantly 0)
-       (fn [input]
-         (loop [state       initial
-                input       (seq input)
-                counter     0
-                last-accept (and (accept initial) 0)]
-           (if-not (seq input)
-             (if (accept state)
-               counter
-               last-accept)
-             (let [n (next-state transitions state (first input))
-                   counter (inc counter)]
-               (cond (reject n) last-accept
-                     (and (not greedy?) (accept n)) counter
-                     (accept n) (recur n (rest input) counter counter)
-                     :else (recur n (rest input) counter last-accept))))))))))
+  ([k fsm]
+   (cond (= k :greedy) (fsm->greedy-count-fn fsm)
+         (= k :non-greedy) (fsm->non-greedy-count-fn fsm)
+         (= k :total) (fsm->total-count-fn fsm)
+         :else (constantly nil))))
 
 ;; ### fsm->trace-fn
 ;;
@@ -78,4 +116,5 @@
                   (cons n (trace-lazy n (rest input)))))))]
     (fn [input]
       (cons initial (trace-lazy initial input)))))
+
 
