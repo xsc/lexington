@@ -49,21 +49,25 @@
 ;; keywords, and tries to increase readability by using "->" between input entity and destination
 ;; state:
 ;;
-;;    (fsm* 
-;;      (:state :a
-;;        \a -> _
-;;        \b -> accept!
-;;        \c -> :c
-;;        *  -> :r)
-;;      (:accepting :c
-;;        \c -> :a)
-;;      (:rejecting :r))
+;;     (fsm* 
+;;       (:state :a
+;;         \a -> _
+;;         \b -> accept!
+;;         \c -> :c
+;;         *  -> :r)
+;;       (:accepting :c
+;;         \c -> :a)
+;;       (:rejecting :r))
 ;;
 ;; This will expand to:
 ;;
-;;    (states->fsm [ (new-state :a [ \a (continue) \b (accept) \c :c (any) :r ])
-;;                   (new-accept-state :c [ \c :a ]) 
-;;                   (new-reject-state :r) ])
+;;     (states->fsm [ 
+;;       (new-state :a [ \a (continue) 
+;;                       \b (accept) 
+;;                       \c :c 
+;;                       (any) :r ])
+;;       (new-accept-state :c [ \c :a ]) 
+;;       (new-reject-state :r) ])
 ;;
 ;; The FSM will accept languages matching the regular expression "a*(cca*)*b", of whatever use
 ;; that might be.
@@ -73,10 +77,10 @@
 
     (fsm* 
       (:state :a
-        (:! 'a 'b 'd) :c
-        'a -> _
-        'b -> accept!
-        *  -> :r)
+        (:! 'a 'b 'd) -> :c
+        'a            -> _
+        'b            -> accept!
+        *             -> :r)
       (:accepting :c
         'c -> :a)
       (:rejecting :r))
