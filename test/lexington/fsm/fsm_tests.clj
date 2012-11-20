@@ -7,11 +7,10 @@
 
 (deftest fsm-structure
   (testing "Simple FSM Structure"
-    (let [f (fsm 
-              (state :l \l :i (eof) (accept))
-              (state :i \i :s)
-              (state :s \s :p)
-              (state :p \p :l))
+    (let [f (states->fsm [(state :l \l :i (eof) (accept))
+                          (state :i \i :s)
+                          (state :s \s :p)
+                          (state :p \p :l) ])
           transitions (:transitions f)]
       (is (= (:initial f) :l))
       (is (contains? (:accept f) (get-in transitions [:l (eof)])))
@@ -25,4 +24,21 @@
            :i \i :s
            :s \s :p
            :p \p :l))))
-                               
+                    
+(deftest fsm*-macro
+  (testing "Special Destination States"
+    (let [f (fsm* 
+              (state :init 
+                \a -> _
+                \b -> reject!
+                \c -> accept!))]
+      nil))
+  (testing "Special Inputs"
+    (let [f (fsm* 
+              (state :init
+                \a            -> :a
+                (:! \b \c \d) -> :e
+                (:? \b \c)    -> :bc
+                *             -> :d))]
+      nil)))
+
