@@ -7,6 +7,33 @@
 (def ^:dynamic *any-input* "Default Transition" ::any)
 (def ^:dynamic *default-state* "Default State" ::default)
 
+;; ## Special Inputs
+
+(def eof
+  "Will initiate a transition on end-of-data."
+  (constantly ::eof))
+
+(defn any
+  "Will initiate a transition not depending on the input."
+  []
+  *any-input*)
+
+(defn except
+  "Transition Rule that will initiate a transition only if the input does not match
+  the values given."
+  [& args]
+  (when (seq args)
+    (fn [s]
+      (cons [*any-input* s]
+            (map (fn [x]
+                   [x nil]) args)))))
+
+(defn one-of
+  "Transition Rule that will initiate a transition only if the input does match one 
+   of the values given."
+  [& args]
+  (set args))
+
 ;; ## Transition Map Generator
 
 (defn- generate-transition-map
