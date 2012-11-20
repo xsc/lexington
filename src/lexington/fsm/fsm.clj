@@ -64,7 +64,6 @@
 ;; - `continue` will be replaced with the current state
 ;; - `reject` will be replaced with the name of a newly generated reject state
 ;; - `accept` will be replaced with the name of a newly generated accept state
-;; - `accept-ignore` ... TODO ...
 ;;
 
 (defn- generate-state-name
@@ -96,7 +95,7 @@
     (h/remap-in :transitions #(if (= % (s/continue)) name %))))
 
 (defn- resolve-acceptors
-  "Replace `(accept)` and `(accept-ignore)` transitions with the name of a newly generated accepting
+  "Replace `(accept)` transitions with the name of a newly generated accepting
    state."
   [{:keys[name] :as s}]
   (-> s

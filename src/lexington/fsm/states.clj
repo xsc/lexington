@@ -14,10 +14,6 @@
   []
   t/*default-state*)
 
-(def accept-ignore
-  "Final state that ignores the current entity and accepts everything before it."
-  (constantly ::accept-ignore))
-
 (def accept
   "Final state that accepts everything up to the current entity."
   (constantly ::accept))
@@ -25,8 +21,7 @@
 (defn acceptor?
   "Check if destination state is predefined acceptor."
   [s]
-  (or (= s (accept))
-      (= s (accept-ignore))))
+  (= s ::accept))
 
 (defn rejector?
   "Check if destination state is predefined rejector."
