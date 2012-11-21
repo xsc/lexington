@@ -27,3 +27,9 @@
   "Throw an exception when encountering a transition that has an unknown target state."
   [from to]
   (transition-invalid from to "unknown destination"))
+
+(defn transition-missing-arrow
+  "Throw an exception when encountering a transition in the `state` macro that does not separate
+   the input entity and the next state by an arrow."
+  [s input]
+  (error "missing '->' in transition '" input "' of state " s))

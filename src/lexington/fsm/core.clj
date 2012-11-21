@@ -6,118 +6,94 @@
             [lexington.fsm.errors :as e]
             [lexington.fsm.fsm :as fsm]))
 
-;; ## Preface
+;; ## Macros
 ;;
-;; It shall only be necessary to include this namespace into a project using FSMs. Thus,
-;; we create wrappers around certain functions from other namespaces, as well as macros
-;; that automatically resolve references to said functions.
+;; ### state/accept/reject
 
-;; ## Wrappers
+(defmacro transitions*
+  "The `transitions*` macro can be used for state generation. It introduces shorthands for the 
+different special transitions and target states:
 
-(defn state
-  "Create new state."
+- `(:not ...)` represents the `(except ...)` transition
+- `(:or ...)` represents the `(one-of ...)` transition
+- `:accept!` represents the `(accept)` destination state
+- `:reject!` represents the `(reject)` destination state
+- `_` represents the `(any) transition or the `(continue)` destination state
+Additionally, the input entity and the next state are now separated by an arrow `->`. Example:
+    
+    (transitions*
+      (:not 'a 'b 'c) -> :a
+      (:or 'b 'c)     -> :accept!
+      _               -> :f)
+
+  "
+  [& transitions]
+  (letfn [(is-underscore? [x]
+            (and (symbol? x) (= (name x) "_")))
+          (is-arrow? [x]
+            (and (symbol? x) (= (name x) "->")))
+          (resolve-input [i]
+            (if (coll? i)
+              (let [[d & args] i]
+                (cond (= d :not) `(t/except ~@args)
+                      (= d :or) `(t/one-of ~@args)
+                      :else i))
+              (if (is-underscore? i) 
+                `(t/any)
+                i)))
+          (resolve-destination [d]
+            (cond (is-underscore? d) `(s/continue)
+                  (= d :accept!) `(s/accept)
+                  (= d :reject!) `(s/reject)
+                  :else d))]
+
+    (if (and (pos? (count transitions)) (< (count transitions) 3))
+      (e/transition-missing-arrow "" (first transitions))
+      (doseq [[i arrow _] (partition 3 transitions)]
+        (when-not (is-arrow? arrow)
+          (e/transition-missing-arrow "" i))))
+
+    `(vector ~@(mapcat 
+                 (fn [[input arrow next-state]]
+                   (vector (resolve-input input)
+                           (resolve-destination next-state)))
+                     (partition 3 transitions)))))
+
+(defmacro state
+  "Create new state, passing its transitions to `transitions*` first."
   [k & transitions]
-  (s/new-state k transitions))
+  `(s/new-state ~k  (transitions* ~@transitions)))
 
-(defn accept-state
+(defmacro accept-state
   "Create new accepting state."
   [k & transitions]
-  (s/new-accept-state k transitions))
+  `(s/new-accept-state ~k (transitions* ~@transitions)))
 
-(defn reject-state
+(defmacro reject-state
   "Create new rejecting state."
   [k]
-  (s/new-reject-state k))
+  `(s/new-reject-state ~k))
 
-(defn new-fsm
-  "Create new FSM from a list of states."
+;; ### with-default
+
+(defmacro with-default
+  "Sets default behaviour for a series of states."
+  [k & states]
+  `(vector ~@(map (fn [x]
+                    `(binding [t/*default-state* ~k]
+                       ~x)) states)))
+
+;; ## FSM Creation Function
+
+(defn fsm*
+  "This function takes a list of single states or list of states and creates an FSM based on 
+   the given states."
   [& states]
-  (fsm/states->fsm states))
-
-;; ## fsm*
-;;
-;; The `fsm*` macro introduces shorthands for the different special transitions and target states:
-;; 
-;; - `*` represents the `(any)` transition
-;; - `(:! ...)` represents the `(except ...)` transition
-;; - `(:? ...)` represents the `(one-of ...)` transition
-;; - `accept!` represents the `(accept)` destination state
-;; - `reject!` represents the `(reject)` destination state
-;; - `_` represents the `(continue)` destination state
-;;
-;; Additionally, it handles the creation of accepting/rejecting/normal states by using special 
-;; keywords, and tries to increase readability by using "->" between input entity and destination
-;; state:
-;;
-;;     (fsm* 
-;;       (:state :a
-;;         \a -> _
-;;         \b -> accept!
-;;         \c -> :c
-;;         *  -> :r)
-;;       (:accepting :c
-;;         \c -> :a)
-;;       (:rejecting :r))
-;;
-;; This will expand to:
-;;
-;;     (states->fsm [ 
-;;       (new-state :a [ \a (continue) 
-;;                       \b (accept) 
-;;                       \c :c 
-;;                       (any) :r ])
-;;       (new-accept-state :c [ \c :a ]) 
-;;       (new-reject-state :r) ])
-;;
-;; The FSM will accept languages matching the regular expression "a*(cca*)*b", of whatever use
-;; that might be.
-
-(defmacro fsm*
-  "Generate FSM from a list of states with special keywords and symbols, e.g.:
-
-    (fsm* 
-      (:state :a
-        (:! 'a 'b 'd) -> :c
-        'a            -> _
-        'b            -> accept!
-        *             -> :r)
-      (:accepting :c
-        'c -> :a)
-      (:rejecting :r))
-  "
-  [& states]
-  (letfn [(get-name [k]
-            (and (or (keyword? k)
-                     (symbol? k))
-                 (name k)))
-          (convert-transitions [n transitions]
-            (vec 
-              (mapcat 
-                (fn [[input arrow next-state]]
-                  (when (not (= (get-name arrow) "->"))
-                    (e/error "Missing '->' in transition [" input " -> ...] of state " n))
-                  (vector (if (coll? input)
-                            (let [[d & args] input
-                                  sym (get-name d)]
-                              (cond (= sym "!") `(t/except ~@args)
-                                    (= sym "?") `(t/one-of ~@args)
-                                    :else input))
-                            (let [sym (get-name input)]
-                              (cond (= sym "*") `(t/any)
-                                    :else input)))
-                          (let [sym (get-name next-state)]
-                            (cond (= sym "_") `(s/continue)
-                                  (= sym "accept!") `(s/accept)
-                                  (= sym "reject!") `(s/reject)
-                                  :else next-state))))
-                (partition 3 transitions))))]
-    (let [states* (map (fn [s]
-                         (if-not (coll? s) s
-                           (let [[k & [n & t]] s
-                                  k (get-name k)]
-                             (cond (= k "state")  `(s/new-state ~n ~(convert-transitions n t))
-                                   (= k "accepting") `(s/new-accept-state ~n ~(convert-transitions n t))
-                                   (= k "rejecting") `(s/new-reject-state ~n)
-                                   :else s))))
-                       states)]
-      `(fsm/states->fsm ~(vec states*)))))
+  (let [flattened-states
+        (mapcat 
+          (fn [x]
+            (cond (map? x) (vector x)
+                  (coll? x) x
+                  :else (e/error "fsm* expects either a state or a collection of states as parameters.")))
+          states)]
+    (fsm/states->fsm flattened-states)))

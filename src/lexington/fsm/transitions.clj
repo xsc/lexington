@@ -3,9 +3,13 @@
   lexington.fsm.transitions)
 
 ;; ## Special Keywords
+(def nil-state "Reject Target State" ::reject)
+(def ^:dynamic *default-state* "Default State" nil)
 
-(def ^:dynamic *any-input* "Default Transition" ::any)
-(def ^:dynamic *default-state* "Default State" ::default)
+(defn- get-default-state
+  "Get current default state."
+  []
+  (or *default-state* nil-state))
 
 ;; ## Special Inputs
 
@@ -13,10 +17,9 @@
   "Will initiate a transition on end-of-data."
   (constantly ::eof))
 
-(defn any
+(def any
   "Will initiate a transition not depending on the input."
-  []
-  *any-input*)
+  (constantly ::any))
 
 (defn except
   "Transition Rule that will initiate a transition only if the input does not match
@@ -24,7 +27,7 @@
   [& args]
   (when (seq args)
     (fn [s]
-      (cons [*any-input* s]
+      (cons [::any s]
             (map (fn [x]
                    [x nil]) args)))))
 
@@ -53,7 +56,7 @@ The most applicable `::any`declaration is always the closest after a transition.
 However, later transitions might actually overwrite the destination (if they are not
 nil). The algorithm used here is thus:
 
-1. Reverse the input sequence and prepend `[::any ::default]`.
+1. Reverse the input sequence and prepend `[::any ::reject]`.
 2. Loop through the sequence.
   - if you encounter `::any` set the current default state to its destination;
     then remove all previous `::any` transition from the sequence and add the
@@ -66,14 +69,14 @@ nil). The algorithm used here is thus:
 
 **TODO:** Evaluate Performance."
   [pairs]
-  (loop [pairs (cons [*any-input* *default-state*]  (reverse pairs))
+  (loop [pairs (cons [::any (get-default-state)]  (reverse pairs))
          result []
          current-default nil]
     (if-not (seq pairs)
       (into {} (map vec result))
       (let [[[e s :as pair] & rst] pairs]
-        (if (= *any-input* e) 
-          (recur rst (conj (filter (comp not #{*any-input*} first) result) pair) s)
+        (if (= ::any e) 
+          (recur rst (conj (filter (comp not #{::any} first) result) pair) s)
           (recur (filter (fn [[x y]] 
                            (or (not (= e x)) y)) rst)
                  (if s

@@ -12,7 +12,7 @@
 (defn reject
   "Let Recognition fail."
   []
-  t/*default-state*)
+  t/nil-state)
 
 (def accept
   "Final state that accepts everything up to the current entity."
@@ -26,7 +26,7 @@
 (defn rejector?
   "Check if destination state is predefined rejector."
   [s]
-  (= s (reject)))
+  (= s t/nil-state))
 
 ;; ## State Representation
 
