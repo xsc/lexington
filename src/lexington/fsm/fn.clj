@@ -3,7 +3,7 @@
   lexington.fsm.fn
   (:require [lexington.fsm.transitions :only [any] :as t]))
 
-;; ## FSM Function Generation
+;; ## Helpers
 
 (defn- next-state
   "Get the next state of an FSM for a given input."
@@ -12,6 +12,81 @@
     (or (st input)
         (st (t/any)))))
 
+;; ## Base Converters
+;;
+;; ### fsm->reduce-fn
+;;
+;; Each FSM can be transformed into a function that takes an input sequence and an optional initial 
+;; value, then traverses the FSM, adjusting the given value on each step. It returns either nil (if
+;; the FSM ended up in a rejecting state), or the final value.
+
+(defn fsm->reduce-fn
+  "Generate function from FSM that calls the given function on each transition, providing the
+   current value, the source and destination states, as well as the processed entity. Returns
+   the final value if the FSM ends in an accepting state or `nil` if it encounters any rejecting
+   one."
+  [f initial-value {:keys[initial transitions accept reject]}]
+  (if (reject initial)
+    (constantly nil)
+    (fn [input]
+      (loop [state initial
+             input (seq input)
+             v     initial-value]
+        (if-not (seq input)
+          (when (accept state) v)
+          (let [n (next-state transitions state (first input))]
+            (when-not (reject n)
+              (recur n (rest input) (f v state n (first input))))))))))
+
+;; ### fsm->trace-reduce-fn
+;;
+;; Behaves like `fsm->reduce-fn` but returns a lazy sequence of the different function results returned on each
+;; transition.
+
+(defn fsm->trace-reduce-fn
+  "Generate function from FSM that calls the given function on each transition, providing the
+   current value, the source and destination states, as well as the processed entity. Returns
+   a lazy sequence of the function results returned at each transition."
+  [f initial-value {:keys[initial transitions accept reject]}]
+  (letfn [(trace-lazy [current-state current-value input]
+            (lazy-seq
+              (when (and (not (reject current-state)) (seq input))
+                (let [n (next-state transitions current-state (first input))
+                      v (f current-value current-state n (first input))]
+                  (cons v (trace-lazy n v (rest input)))))))]
+    (if (reject initial)
+      (constantly nil)
+      (fn [input]
+        (cons initial-value (trace-lazy initial initial-value input))))))
+
+;; ### fsm->find-reduce-fn
+;;
+;; Behaves like `fsm->reduce-fn`but returns a lazy sequence of the different function results returned on each 
+;; transition to an accepting state.
+
+(defn fsm->find-reduce-fn
+  "Generate function from FSM that calls the given function on each transition, providing the
+   current value, the source and destination states, as well as the processed entity. Returns
+   a lazy sequence of the function results returned at each transition into an accepting state."
+  [f initial-value {:keys[initial transitions accept reject]}]
+  (letfn [(find-lazy [current-state current-value input]
+            (lazy-seq
+              (when (and (not (reject current-state)) (seq input))
+                (let [n (next-state transitions current-state (first input))
+                      v (f current-value current-state n (first input))]
+                  (if (accept n)
+                    (cons v (find-lazy n v (rest input)))
+                    (find-lazy n v (rest input)))))))]
+    (if (reject initial)
+      (constantly nil)
+      (fn [input]
+        (let [found (find-lazy initial initial-value input)]
+          (if (accept initial)
+            (cons initial-value found)
+            found))))))
+
+;; ## Derived Converters
+;;
 ;; ### fsm->check-fn
 ;;
 ;; Each FSM can be transformed into a function that takes an input sequence and produces either nil (if
@@ -20,15 +95,12 @@
 (defn fsm->check-fn
   "Generate function from an FSM that returns either `nil` (if the FSM does not recognize an input sequence)
    or the final accepting state."
-  [{:keys[initial transitions accept reject]}]
-  (fn [input]
-    (loop [state initial
-           input (seq input)]
-      (if-not (seq input)
-        (accept state)
-        (let [n (next-state transitions state (first input))]
-          (when-not (reject n)
-            (recur n (rest input))))))))
+  [{:keys[initial] :as fsm}]
+  (fsm->reduce-fn 
+    (fn [_ _ dest-state _]
+      dest-state)
+    initial
+    fsm))
 
 ;; ### fsm->count-fn
 ;;
@@ -37,55 +109,28 @@
 
 (defn- fsm->greedy-count-fn
   "Generate counter function that tries to accept the maximum number of input entities."
-  [{:keys[initial transitions accept reject]}]
-  (if (reject initial) 
-    (constantly nil)
-    (fn [input]
-      (loop [state initial
-             input (seq input)
-             counter 0
-             last-accept (and (accept initial) 0)]
-        (if-not (seq input)
-          (if (accept state)
-            counter
-            last-accept)
-          (let [n (next-state transitions state (first input))
-                counter (inc counter)]
-            (cond (reject n) last-accept
-                  (accept n) (recur n (rest input) counter counter)
-                  :else (recur n (rest input) counter last-accept))))))))
+  [fsm]
+  (comp last
+        (fsm->find-reduce-fn
+          (fn [counter & _]
+            (inc counter))
+          0
+          fsm)))
 
 (defn- fsm->non-greedy-count-fn
   "Generate counter function that tries to accept the minimum number of input entities."
-  [{:keys[initial transitions accept reject]}]
-  (cond (reject initial) (constantly nil)
-        (accept initial) (constantly 0)
-        :else (fn [input]
-                (loop [state initial
-                       input (seq input)
-                       counter 0]
-                  (if-not (seq input)
-                    (when (accept state) counter)
-                    (let [n (next-state transitions state (first input))]
-                      (cond (reject n) nil
-                            (accept n) (inc counter)
-                            :else (recur n (rest input) (inc counter)))))))))
+  [fsm]
+  (comp first
+        (fsm->find-reduce-fn
+          (fn [counter & _]
+            (inc counter))
+          0
+          fsm)))
 
 (defn- fsm->total-count-fn
   "Generate counter function that counts the times the FSM enters an accepting state."
-  [{:keys[initial transitions accept reject]}]
-  (if (reject initial)
-    (constantly nil)
-    (fn [input]
-      (loop [state initial
-             input (seq input)
-             counter (if (accept initial) 1 0)]
-        (if-not (seq input)
-          counter
-          (let [n (next-state transitions state (first input))]
-            (cond (reject n) counter
-                  (accept n) (recur n (rest input) (inc counter))
-                  :else (recur n (rest input) counter))))))))
+  [fsm]
+  (comp count (fsm->find-reduce-fn (constantly nil) nil fsm)))
 
 (defn fsm->count-fn
   "Generate a function from an FSM that returns either `nil` (if the FSM never enters an accepting state) or
@@ -99,22 +144,3 @@
          (= k :non-greedy) (fsm->non-greedy-count-fn fsm)
          (= k :total) (fsm->total-count-fn fsm)
          :else (constantly nil))))
-
-;; ### fsm->trace-fn
-;;
-;; Each FSM can be transformed into a function that returns a lazy sequence of the states produced by an input sequence,
-;; where the last element is either the first rejecting state or the one the FSM was in when the sequence ended.
-
-(defn fsm->trace-fn
-  "Generate a function from an FSM that returns a lazy sequence with the names of the states the FSM entered by 
-   processing the sequence, either up to the first rejecting state or the state at the end of the sequence."
-  [{:keys[initial transitions reject]}]
-  (letfn [(trace-lazy [current-state input]
-            (lazy-seq
-              (when (and (not (reject current-state)) (seq input))
-                (let [n (next-state transitions current-state (first input))]
-                  (cons n (trace-lazy n (rest input)))))))]
-    (fn [input]
-      (cons initial (trace-lazy initial input)))))
-
-
