@@ -103,6 +103,19 @@
     initial
     fsm))
 
+;; ### fsm->trace-fn
+
+(defn fsm->trace-fn
+  "Create function from FSM that returns a lazy sequence of the states the FSM traverses for a 
+   specific input."
+  [{:keys[initial] :as fsm}]
+  (fsm->trace-reduce-fn
+    (fn [_ _ dest-state _]
+      dest-state)
+    initial
+    fsm))
+
+
 ;; ### fsm->count-fn
 ;;
 ;; Each FSM can be transformed into a counter function that returns the number of input entities it read
