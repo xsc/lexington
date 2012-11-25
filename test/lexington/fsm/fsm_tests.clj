@@ -1,6 +1,7 @@
 (ns lexington.fsm.fsm-tests
   (:use lexington.fsm.core
         lexington.fsm.fsm
+        lexington.fsm.fn
         [lexington.fsm.states :as s]
         [lexington.fsm.transitions :as t]
         clojure.test))
@@ -24,7 +25,7 @@
            :i \i :s
            :s \s :p
            :p \p :l))))
-                    
+
 (deftest fsm*-macro
   (testing "Special Destination States"
     (let [f (fsm* 
@@ -42,3 +43,29 @@
                 _               -> :d))]
       nil)))
 
+(deftest string-fsm
+  (testing "FSM to recognize Strings in quotation marks."
+    (let [f (fsm*
+              (with-default :error
+                (state :init \" -> :in)
+                (state :in
+                  \" -> :found
+                  \\ -> :esc
+                  _  -> :in)
+                (state :esc
+                  (:or \\ \" \t \r \n) -> :in))
+              (accept-state :found)
+              (reject-state :error))
+          recognize-string (fsm->trace-fn f)]
+      (is (= (recognize-string "\"abc\"") 
+             [:init :in :in :in :in :found]))
+      (is (= (recognize-string "\"ab\\\"c\"") 
+             [:init :in :in :in :esc :in :in :found]))
+      (is (= (recognize-string "\"\\t\\n\\r\\\\\"")
+             [:init :in :esc :in :esc :in :esc :in :esc :in :found]))
+      (is (= (recognize-string "\"ab\\x\"")
+             [:init :in :in :in :esc :error]))
+      (is (= (recognize-string "abc")
+             [:init :error]))
+      (is (= (recognize-string "\"ab\\t")
+             [:init :in :in :in :esc :in])))))
