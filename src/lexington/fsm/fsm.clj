@@ -148,11 +148,9 @@
     (-> s
       resolve-continue
       resolve-acceptors
-      resolve-rejectors
       (h/into-map-in :transitions))
     (concat
-      (generate-acceptors s)
-      (generate-rejectors s))))
+      (generate-acceptors s))))
 
 (defn- normalize-states
   "Perform normalization on a list of states."
@@ -246,7 +244,9 @@
   (let [{ s1 :states i1 :initial t1 :transitions a1 :accept r1 :reject } fsm1
         { s2 :states i2 :initial t2 :transitions a2 :accept r2 :reject } fsm2]
     (let [states (for [x s1 y s2] [x y])
-          state-map (zipmap states (for [i (range)] (keyword (str "state-" i))))
+          state-map (->
+                      (zipmap states (for [i (range)] (keyword (str "state-" i))))
+                      (assoc [(s/reject) (s/reject)] (s/reject)))
           initial (state-map [i1 i2])
           accept (map state-map
                       (filter (fn [[x y]]
