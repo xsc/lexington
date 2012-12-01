@@ -18,16 +18,17 @@
         (graph 
           (concat
             [(node-attrs { :shape :ellipse :height "0.8" :width "0.8" :fontsize "8pt" :fixedsize "true" })
-             (edge-attrs { :fontsize "8pt" })]
+             (edge-attrs { :fontsize "8pt" })
+             [:__init { :style "invisible" :height "0.1" :width "0.1" }]]
+
             (map (fn [s]
-                   (cond (= s initial)
-                           [s { :style "bold" }]
-                         (accept s)
+                   (cond (accept s)
                            [s { :color "darkgreen" :fontcolor "darkgreen" :style "bold" }]
                          (reject s)
-                           [s { :color "darkred" :fontcolor "darkred" :style "bold" }]
+                           [s { :color "red" :fontcolor "red" :style "bold" }]
                          :else s))
                  (filter #(not (= % (s/reject))) states))
+            [[:__init initial { :dir :forward }]]
             (mapcat
               (fn [[from to-map]]
                 (filter (comp not nil?)
