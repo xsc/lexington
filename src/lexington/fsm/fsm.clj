@@ -2,6 +2,7 @@
        :author "Yannick Scherer" }
   lexington.fsm.fsm
   (:require [lexington.fsm.states :as s]
+            [lexington.fsm.transitions :as t :only [any]]
             [lexington.fsm.helpers :as h]))
 
 ;; ## FSM Generation
@@ -156,7 +157,9 @@
 (defn- normalize-states
   "Perform normalization on a list of states."
   [states]
-  (mapcat normalize-single-state states))
+  (-> (mapcat normalize-single-state states)
+    vec
+    (conj (s/new-reject-state (s/reject)))))
 
 ;; ## FSM Minimization
 
@@ -226,7 +229,10 @@
           (vector (state-map s) 
                   (into {}
                     (for [e in] 
-                      (vector e (state-map [(tx e) (ty e)]))))))))))
+                      (let [txe (or (tx e) (tx (t/any)))
+                            tye (or (ty e) (ty (t/any)))]
+                        (when (and txe tye)
+                          (vector e (state-map [txe tye]))))))))))))
 
 (defn cartesian-product
   "Build the cartesian product of two FSM's. This is done by using the following data:
@@ -251,13 +257,13 @@
                                 (reject? x y r1 r2))
                               states))
           transitions (cartesian-product-transitions state-map t1 t2)]
-      (minimize
-        (-> {}
-          (assoc :states (set (vals state-map)))
-          (assoc :initial initial)
-          (assoc :transitions transitions)
-          (assoc :accept (set accept))
-          (assoc :reject (set reject)))))))
+      (-> {}
+        (assoc :states (set (vals state-map)))
+        (assoc :initial initial)
+        (assoc :transitions transitions)
+        (assoc :accept (set accept))
+        (assoc :reject (set reject))
+        minimize))))
 
 (defn intersect
   "Create (cartesian product) intersection of two FSMs."
