@@ -291,6 +291,6 @@
   (cartesian-product
     fsm1 fsm2
     (fn [x y a1 a2]
-      (and (a1 x) (not (a2 x))))
+      (and (a1 x) (not (a2 y))))
     (fn [x y r1 r2]
-      (and (r1 x) (not (r2 y))))))
+      (and (r1 x) (r2 y)))))
