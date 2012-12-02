@@ -13,13 +13,13 @@
 
 ;; ## Special Inputs
 
-(def eof
+(def ^:const eof
   "Will initiate a transition on end-of-data."
-  (constantly ::eof))
+  ::eof)
 
-(def any
+(def ^:const any
   "Will initiate a transition not depending on the input."
-  (constantly ::any))
+  ::any)
 
 (defn except
   "Transition Rule that will initiate a transition only if the input does not match
@@ -27,7 +27,7 @@
   [& args]
   (when (seq args)
     (fn [s]
-      (cons [::any s]
+      (cons [any s]
             (map (fn [x]
                    [x nil]) args)))))
 
@@ -69,14 +69,14 @@ nil). The algorithm used here is thus:
 
 **TODO:** Evaluate Performance."
   [pairs]
-  (loop [pairs (cons [::any (get-default-state)]  (reverse pairs))
+  (loop [pairs (cons [any (get-default-state)]  (reverse pairs))
          result []
          current-default nil]
     (if-not (seq pairs)
       (into {} (map vec result))
       (let [[[e s :as pair] & rst] pairs]
-        (if (= ::any e) 
-          (recur rst (conj (filter (comp not #{::any} first) result) pair) s)
+        (if (= any e) 
+          (recur rst (conj (filter (comp not #{any} first) result) pair) s)
           (recur (filter (fn [[x y]] 
                            (or (not (= e x)) y)) rst)
                  (if s

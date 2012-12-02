@@ -5,28 +5,27 @@
 
 ;; ## Special Destination States
 
-(def continue
+(def ^:const continue!
   "Stay in current state."
-  (constantly ::continue))
+  ::continue)
 
-(defn reject
+(def ^:const reject!
   "Let Recognition fail."
-  []
   t/nil-state)
 
-(def accept
+(def ^:const accept!
   "Final state that accepts everything up to the current entity."
-  (constantly ::accept))
+  ::accept)
 
 (defn acceptor?
   "Check if destination state is predefined acceptor."
   [s]
-  (= s ::accept))
+  (= s accept!))
 
 (defn rejector?
   "Check if destination state is predefined rejector."
   [s]
-  (= s t/nil-state))
+  (= s reject!))
 
 ;; ## State Representation
 
@@ -37,7 +36,7 @@
       [ 'a             :a
         (except 'b 'c) :d
         (except 'b)    :c
-        (any)          :b ])
+        any            :b ])
 
     ;-> { :transitions { 'a :a, 
     ;                    :lexington.fsm.transitions/any :d, 

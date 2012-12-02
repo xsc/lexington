@@ -2,9 +2,9 @@
        :author "Yannick Scherer" }
   lexington.fsm.visualize
   (:use dorothy.core
-        [lexington.fsm.fsm :as fsm]
         [lexington.fsm.transitions :as t]
-        [lexington.fsm.states :as s]))
+        [lexington.fsm.states :as s]
+        lexington.fsm.transform))
 
 (defn fsm->dot
   "Convert FSM to GraphViz Dot format."
@@ -27,15 +27,15 @@
                          (reject s)
                            [s { :color "red" :fontcolor "red" :style "bold" }]
                          :else s))
-                 (filter #(not (= % (s/reject))) states))
+                 (filter #(not (= % s/reject!)) states))
             [[:__init initial { :dir :forward }]]
             (mapcat
               (fn [[from to-map]]
                 (filter (comp not nil?)
                         (map (fn [[e to]]
-                               (when-not (= to (s/reject))
+                               (when-not (= to s/reject!)
                                  [from to { :dir :forward 
-                                           :label (if (= e (t/any)) "*" (str e)) }])) to-map)))
+                                           :label (if (= e t/any) "*" (str e)) }])) to-map)))
               transitions)))
         dot))))
 

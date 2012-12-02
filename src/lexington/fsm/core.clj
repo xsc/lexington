@@ -16,9 +16,9 @@ different special transitions and target states:
 
 - `(:not ...)` represents the `(except ...)` transition
 - `(:or ...)` represents the `(one-of ...)` transition
-- `:accept!` represents the `(accept)` destination state
-- `:reject!` represents the `(reject)` destination state
-- `_` represents the `(any) transition or the `(continue)` destination state
+- `:accept!` represents the `accept!` destination state
+- `:reject!` represents the `reject!` destination state
+- `_` represents the `any` transition or the `continue!` destination state
 Additionally, the input entity and the next state are now separated by an arrow `->`. Example:
     
     (transitions*
@@ -39,12 +39,12 @@ Additionally, the input entity and the next state are now separated by an arrow 
                       (= d :or) `(t/one-of ~@args)
                       :else i))
               (if (is-underscore? i) 
-                `(t/any)
+                `t/any
                 i)))
           (resolve-destination [d]
-            (cond (is-underscore? d) `(s/continue)
-                  (= d :accept!) `(s/accept)
-                  (= d :reject!) `(s/reject)
+            (cond (is-underscore? d) `s/continue!
+                  (= d :accept!) `s/accept!
+                  (= d :reject!) `s/reject!
                   :else d))]
 
     (if (and (pos? (count transitions)) (< (count transitions) 3))
