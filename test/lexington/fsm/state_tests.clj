@@ -15,7 +15,7 @@
         \a        :a
         \b        :b
         \c        :c
-        (t/any) (s/reject)))))
+        t/any     s/reject!))))
 
   (testing "State Transitions with sets of literals"
     (let [s (s/new-state :k [ #{\a \b} :ab
@@ -27,7 +27,7 @@
         \b        :ab
         \c        :cd
         \d        :cd
-        (t/any) (s/reject)))))
+        t/any     s/reject!))))
 
   (testing "State Transitions with 'except'"
     (let [s (s/new-state :k [ (t/except \a \b \c) :d
@@ -35,41 +35,41 @@
                               (t/except \a)       :b ])
           t (:transitions s)]
       (are [e s] (= (t e) s)
-        \a        (s/reject)
+        \a        s/reject!
         \b        :b
         \c        :c
-        (t/any) :d)))
+        t/any     :d)))
 
   (testing "State Transitions with 'any'"
     (let [s (s/new-state :k [ \a        :a
                               \b        :b
-                              (t/any)   :c ])
+                              t/any     :c ])
           t (:transitions s)]
       (are [e s] (= (t e) s)
         \a        :a
         \b        :b
-        (t/any) :c)))
+        t/any     :c)))
   
   (testing "State Transitions with 'any' and 'except'"
     (let [s (s/new-state :k [ (t/except \a \b) :c
                               (t/except \a)    :b
-                              (t/any)          :a ])
+                              t/any            :a ])
           t (:transitions s)]
       (are [e s] (= (t e) s)
         \a        :a
         \b        :b
-        (t/any) :c)))
+        t/any     :c)))
 
   (testing "State Transitions with 'any', 'except' and literals."
     (let [s (s/new-state :k [ \x                  :x
                               (t/except \x \a \b) :y
                               \a                  :a
-                              (t/any)             :b ])
+                              t/any               :b ])
           t (:transitions s)]
       (are [e s] (= (t e) s)
         \a        :a
         \b        :b
         \x        :x
-        (t/any) :y)))
+        t/any     :y)))
 
 )

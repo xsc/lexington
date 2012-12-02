@@ -8,14 +8,14 @@
 
 (deftest fsm-structure
   (testing "Simple FSM Structure"
-    (let [f (states->fsm [(s/new-state :l [ \l :i (t/eof) (s/accept) ])
+    (let [f (states->fsm [(s/new-state :l [ \l :i t/eof s/accept! ])
                           (s/new-state :i [ \i :s ])
                           (s/new-state :s [ \s :p ])
                           (s/new-state :p [ \p :l ]) ])
           transitions (:transitions f)]
       (is (= (:initial f) :l))
-      (is (contains? (:accept f) (get-in transitions [:l (t/eof)])))
-      (are [s] (contains? (:reject f) (get-in transitions [s (t/any)]))
+      (is (contains? (:accept f) (get-in transitions [:l t/eof])))
+      (are [s] (contains? (:reject f) (get-in transitions [s t/any]))
            :l 
            :i 
            :s 
