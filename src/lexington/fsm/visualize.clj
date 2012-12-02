@@ -12,16 +12,19 @@
   [transitions]
   (reduce
     (fn [tr [e to]]
-      (merge-with concat
-        tr
-        { to [e] }))
+      (let [to (if (set? to) to (hash-set to))]
+        (reduce
+          (fn [m t]
+            (merge-with concat m { t [e] }))
+          tr
+          to)))
     {}
     transitions))
 
 (defn fsm->dot
   "Convert FSM to GraphViz Dot format."
   [fsm]
-  (let [{:keys[accept reject states transitions initial]} (remove-unreachable-states fsm)]
+  (let [{:keys[accept reject states transitions initial]} (remove-unreachable-states fsm]
     (-> 
       (graph 
         (concat
