@@ -5,13 +5,12 @@
 
 ;; ## Helpers
 
-(def next-state
+(defn- next-state
   "Get the next state of an FSM for a given input."
-  (let [any-transition (t/any)]
-    (fn [transitions current-state input]
-      (let [st (get transitions current-state)]
-        (or (get st input)
-            (get st any-transition))))))
+  [transitions current-state input]
+  (let [st (transitions current-state)]
+    (or (st input)
+        (st t/any))))
 
 ;; ## Base Converters
 ;;
