@@ -94,9 +94,9 @@
 
 (defn- find-dead-states
   "Get a set of all the dead states in the given FSM. A dead state only has
-   transitions to itself and is neither explicitly accepting nor rejecting."
+   transitions to itself and is not explicitly accepting."
   [{:keys[states accept reject transitions] :as fsm}]
-  (let [candidates (filter (comp not (sets/union accept reject)) states)]
+  (let [candidates (filter (comp not accept) states)]
     (set
       (filter (fn [s]
                 (let [dests (vals (transitions s))]
