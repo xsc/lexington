@@ -24,7 +24,7 @@
 (defn fsm->dot
   "Convert FSM to GraphViz Dot format."
   [fsm]
-  (let [{:keys[accept reject states transitions initial]} (remove-unreachable-states fsm]
+  (let [{:keys[accept reject states transitions initial]} (remove-unreachable-states fsm)]
     (-> 
       (graph 
         (concat
