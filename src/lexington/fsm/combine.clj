@@ -33,7 +33,8 @@
 - Initial State: (`(:initial fsm1)`, `(:initial fsm2)`)
 - Transitions: { [x, y] { <input> [(get-in fsm1 [:transitions x <input>]), ...] ... } ... }`
   "
-  [fsm1 fsm2 accept?]
+  ([fsm1 fsm2 accept?] (dfa-cartesian-product fsm1 fsm2 accept? { :minimize true }))
+  ([fsm1 fsm2 accept? option-map]
 
   ;; New states and unique names for them
   (let [{ s1 :states i1 :initial t1 :transitions a1 :accept r1 :reject } fsm1
@@ -43,7 +44,8 @@
           accept (filter (fn [[x y]]
                            (accept? x y a1 a2))
                          states)
-          transitions (dfa-cartesian-product-transitions t1 t2)]
+          transitions (dfa-cartesian-product-transitions t1 t2)
+          finalizer (if (option-map :minimize) minimize-dfa identity)]
       (-> {}
         (assoc :states (set states))
         (assoc :initial initial)
@@ -52,7 +54,8 @@
         (assoc :reject #{})
         remove-unreachable-states
         (reindex-fsm #(= % [s/reject! s/reject!])
-                     #(= % [s/accept! s/accept!]))))))
+                     #(= % [s/accept! s/accept!]))
+        (finalizer))))))
 
 ;; ## Logical Combinations (DFA only)
 

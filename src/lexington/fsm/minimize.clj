@@ -3,6 +3,7 @@
   lexington.fsm.minimize
   (:use [clojure.set :as sets]
         [lexington.fsm.transitions :as t :only [any]]
+        [lexington.fsm.states :as s :only [reject! accept!]]
         [lexington.fsm.transform :only [reindex-fsm]]))
 
 ;; ## Minimization
@@ -41,6 +42,7 @@
     dest-states))
 
 (defn- generate-next-step
+  "Execution of Hopcroft's algorithm for one input character's source state set."
   [partitions indicators source-states]
   (let [src (set source-states)]
     (reduce
@@ -58,10 +60,11 @@
       partitions)))
 
 (defn- create-partitions
+  "Create partitions of state space based on equivalency classes."
   [{:keys[transitions accept reject states]}]
   (let [alphabet (mapcat (comp keys second) transitions)]
-    (loop [partitions (hash-set accept (set (filter (comp not accept) states)))
-           indicators (hash-set accept)]
+    (loop [partitions (hash-set accept reject (set (filter (comp not (sets/union accept reject)) states)))
+           indicators (hash-set accept reject)]
       (if-not (seq indicators)
         (filter (comp not empty?) partitions)
         (let [a (first indicators)
@@ -74,6 +77,8 @@
           (recur p i))))))
 
 (defn- rename-transitions
+  "Based on a rename map generated from equivalency classes, clean up the
+   transition table."
   [rename-map transitions]
   (reduce
     (fn [m [from tt]]
@@ -81,9 +86,22 @@
         (if (m n)
           m
           (assoc m n
-                 (reduce #(assoc %1 (first %2) (rename-map (second %2))) {} tt)))))
+                 (reduce #(assoc %1 (first %2) 
+                                 (rename-map (second %2))) 
+                         {} tt)))))
     {}
     transitions))
+
+(defn- find-dead-states
+  "Get a set of all the dead states in the given FSM. A dead state only has
+   transitions to itself and is neither explicitly accepting nor rejecting."
+  [{:keys[states accept reject transitions] :as fsm}]
+  (let [candidates (filter (comp not (sets/union accept reject)) states)]
+    (set
+      (filter (fn [s]
+                (let [dests (vals (transitions s))]
+                  (not (some (comp not (hash-set s s/reject!)) dests))))
+              candidates))))
 
 (defn minimize-dfa
   "Minimize DFA using Hopcroft's Algorithm."
@@ -95,11 +113,17 @@
                      (fn [m [p n]]
                        (reduce #(assoc %1 %2 n) m p))
                      {}
-                     partition-map)]
-    (-> {}
-      (assoc :states (set (map rename-map states)))
-      (assoc :accept (set (map rename-map accept)))
-      (assoc :reject (set (map rename-map reject)))
-      (assoc :initial (rename-map initial))
-      (assoc :transitions (rename-transitions rename-map transitions))
-      (reindex-fsm))))
+                     partition-map)
+        new-transitions (rename-transitions rename-map transitions)
+        minimized-fsm (-> {}
+                        (assoc :states (set (map rename-map states)))
+                        (assoc :accept (set (map rename-map accept)))
+                        (assoc :reject (set (map rename-map reject)))
+                        (assoc :initial (rename-map initial))
+                        (assoc :transitions (rename-transitions rename-map transitions)))
+        dead-states (find-dead-states minimized-fsm)]
+    (reindex-fsm minimized-fsm
+                 (fn [s]
+                   (or (= s s/reject!)
+                       (dead-states s)))
+                 #(= % s/accept!))))
