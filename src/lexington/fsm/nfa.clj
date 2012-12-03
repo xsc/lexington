@@ -21,15 +21,37 @@
                 (if (set? current-transitions)
                   (conj current-transitions to)
                   (hash-set to current-transitions)))
-      (assoc :states (conj (set states) to))
+      (assoc :states (conj (conj (set states) to) from))
       (assoc :initial (or initial from)))))
-
-;; ## Epsilon-NFA to NFA
 
 (defn add-epsilon-transition
   "Add Epsilon Transition to NFA."
   [nfa from to]
   (add-transition nfa from nil to))
+
+(defn nfa-reject-state?
+  [state-set]
+  (not (some (comp not #(= % s/reject!)) state-set)))
+
+(defn nfa-accept-state?
+  [state-set]
+  (not (some (comp not #(= % s/accept!)) state-set)))
+
+(defn nfa*
+  "Create NFA from a list of transition vectors. A transition vector
+   consists of the source state and a list of input/next-state pairs."
+  [& transitions]
+  (reduce
+    (fn [nfa [src-state & trv]]
+      (let [pairs (partition 2 trv)]
+        (reduce 
+          (fn [nfa [input dst-state]]
+            (add-transition nfa src-state input dst-state))
+          nfa
+          pairs)))
+    {}
+    transitions))
+;; ## Epsilon-NFA to NFA
 
 (defn epsilon-closure-state
   "Get epsilon closure states by following all epsilon transitions and creating a set of
@@ -80,7 +102,10 @@
       (assoc :states closure-states)
       (assoc :accept closure-accept)
       (assoc :initial (closure-state-map initial))
-      (assoc :transitions closure-trans))))
+      (assoc :transitions closure-trans)
+      (reindex-fsm
+        nfa-reject-state?
+        nfa-accept-state?))))
 
 ;; ## NFA to DFA
 
@@ -114,10 +139,8 @@
           (assoc :reject (set (filter (fn [x] 
                                         (not (some (comp not (set reject)) x))) states)))
           (reindex-fsm 
-            (fn [x]
-              (not (some (comp not #(= % s/reject!)) x)))
-            (fn [x]
-              (not (some (comp not #(= % s/accept!)) x)))))
+            nfa-reject-state?
+            nfa-accept-state?))
         (let [child-transitions (map get-transitions remaining-states)
               child-states (filter (comp not states) (mapcat vals child-transitions))]
           (recur (set (concat states child-states))
