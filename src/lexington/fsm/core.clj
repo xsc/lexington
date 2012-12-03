@@ -4,11 +4,11 @@
   (:require [lexington.fsm.states :as s]
             [lexington.fsm.transitions :as t]
             [lexington.fsm.errors :as e]
-            [lexington.fsm.fsm :as fsm]))
+            [lexington.fsm.fsm :as fsm]
+            [lexington.fsm.nfa :as n :only [nfa*]]
+            [lexington.fsm.dfa :as d :only [dfa*]]))
 
-;; ## Macros
-;;
-;; ### state/accept/reject
+;; ## Transition DSL
 
 (defmacro transitions*
   "The `transitions*` macro can be used for state generation. It introduces shorthands for the 
@@ -27,7 +27,7 @@ Additionally, the input entity and the next state are now separated by an arrow 
       _               -> :f)
 
   "
-  [& transitions]
+  [k & transitions]
   (letfn [(is-underscore? [x]
             (and (symbol? x) (= (name x) "_")))
           (is-arrow? [x]
@@ -41,8 +41,8 @@ Additionally, the input entity and the next state are now separated by an arrow 
               (if (is-underscore? i) 
                 `t/any
                 i)))
-          (resolve-destination [d]
-            (cond (is-underscore? d) `s/continue!
+          (resolve-destination [d x]
+            (cond (is-underscore? d) x
                   (= d :accept!) `s/accept!
                   (= d :reject!) `s/reject!
                   :else d))]
@@ -56,44 +56,50 @@ Additionally, the input entity and the next state are now separated by an arrow 
     `(vector ~@(mapcat 
                  (fn [[input arrow next-state]]
                    (vector (resolve-input input)
-                           (resolve-destination next-state)))
+                           (resolve-destination next-state k)))
                      (partition 3 transitions)))))
 
-(defmacro state
-  "Create new state, passing its transitions to `transitions*` first."
-  [k & transitions]
-  `(s/new-state ~k  (transitions* ~@transitions)))
+;; ## NFA/DFA generation
+;;
+;; Generation is done by supplying the states to use:
+;;
+;;     (nfa
+;;       (:state :init
+;;         \a -> :a
+;;         \b -> :b)
+;;       (:state :b 
+;;         \a -> _)
+;;       (:accept :a))
+;;       
+;; This will expand to
+;;
+;;     (-> 
+;;       (nfa*
+;;         [:init \a :a \b :b]
+;;         [:b \a :b])
+;;       (accept-in :a))
+;;
+;; Similarly for DFAs.
 
-(defmacro accept-state
-  "Create new accepting state."
-  [k & transitions]
-  `(s/new-accept-state ~k (transitions* ~@transitions)))
+(defmacro new-fsm
+  "Create new FSM based on the given type and a series of states."
+  [type & states]
+  `(->
+     (~(if (= type :nfa) `n/nfa* `d/dfa*)
+       ~@(map (fn [[_ s & t]]
+                `(list* ~s (transitions* ~s ~@t)))
+              states))
+     ~@(map (fn [[_ s & _]]
+              `(fsm/accept-in ~s))
+            (filter (fn [[k & _]] 
+                      (= k :accept-state)) states))))
 
-(defmacro reject-state
-  "Create new rejecting state."
-  [k]
-  `(s/new-reject-state ~k))
-
-;; ### with-default
-
-(defmacro with-default
-  "Sets default behaviour for a series of states."
-  [k & states]
-  `(vector ~@(map (fn [x]
-                    `(binding [t/*default-state* ~k]
-                       ~x)) states)))
-
-;; ## FSM Creation Function
-
-(defn fsm*
-  "This function takes a list of single states or list of states and creates an FSM based on 
-   the given states."
+(defmacro nfa
+  "Create NFA from series of states."
   [& states]
-  (let [flattened-states
-        (mapcat 
-          (fn [x]
-            (cond (map? x) (vector x)
-                  (coll? x) x
-                  :else (e/error "fsm* expects either a state or a collection of states as parameters.")))
-          states)]
-    (fsm/states->fsm flattened-states)))
+  `(new-fsm :nfa ~@states))
+
+(defmacro dfa
+  "Create DFA from series of states."
+  [& states]
+  `(new-fsm :dfa ~@states))

@@ -5,7 +5,8 @@
         [clojure.string :as string :only [join]]
         [lexington.fsm.transitions :as t]
         [lexington.fsm.states :as s]
-        lexington.fsm.transform))
+        [lexington.fsm.nfa :as nfa :only [epsi]]
+        lexington.fsm.fsm))
 
 (defn- collect-transitions
   "Convert a map of `{ <input> :next-state ... }` to `{ :next-state [<input> ...] ... }`"
@@ -55,7 +56,11 @@
                 (filter (comp not nil?)
                         (map (fn [[to es]]
                                (when-not (= to s/reject!)
-                                 (let [label (string/join "," (map #(if (= % t/any) "*" (str %)) es))]
+                                 (let [label (string/join "," 
+                                                          (map (fn [e]
+                                                                 (cond (= e t/any) "*"
+                                                                       (= e nfa/epsi) "\u03f5"
+                                                                       :else (str e))) es))]
                                    [(node-name from) (node-name to) { :dir :forward :label label }])))
                              ct))))
             transitions)))

@@ -4,7 +4,7 @@
   (:use [clojure.set :as sets]
         [lexington.fsm.transitions :as t :only [any]]
         [lexington.fsm.states :as s :only [reject! accept!]]
-        [lexington.fsm.transform :only [reindex-fsm]]))
+        [lexington.fsm.fsm :only [reindex-fsm]]))
 
 ;; ## Minimization
 ;;
