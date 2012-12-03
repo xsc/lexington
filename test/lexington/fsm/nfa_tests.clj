@@ -1,0 +1,32 @@
+(ns ^{ :doc "Test of NFA Functionality."
+       :author "Yannick Scherer" }
+  lexington.fsm.nfa-tests
+  (:use clojure.test
+        lexington.fsm.nfa))
+
+(deftest nfa-structure
+  (testing "nfa-add"
+    (let [nfa (-> {}
+               (nfa-add :a 0 :b)
+               (nfa-add :b 1 :a)
+               (nfa-add :a 0 :a))]
+      (are [s e n] (= (get-in nfa [:transitions s e]) n)
+           :a 0 #{:a :b}
+           :b 1 #{:a})))
+  (testing "nfa-add-epsilon"
+    (let [nfa (-> {}
+                (nfa-add :a 0 :b)
+                (nfa-add-epsilon :b :a))]
+      (are [s e n] (= (get-in nfa [:transitions s e]) n)
+           :a 0    #{:b}
+           :b epsi #{:a})))
+  (testing "nfa*"
+    (let [nfa (nfa*
+                [:a 0 :b 0 :a]
+                [:b 1 #{:a :b} epsi :c]
+                [:a 0 :c])]
+      (are [s e n] (= (get-in nfa [:transitions s e]) n)
+           :a 0    #{:a :b :c}
+           :b 1    #{:a :b}
+           :b epsi #{:c})))
+)

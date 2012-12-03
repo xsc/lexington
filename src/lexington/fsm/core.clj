@@ -8,6 +8,20 @@
             [lexington.fsm.nfa :as n :only [nfa*]]
             [lexington.fsm.dfa :as d :only [dfa*]]))
 
+;; ## Combining of Transitions 
+
+(defn dfa-combine
+  [a b]
+  a)
+
+(defn nfa-combine
+  [a b]
+  (let [a-set (if (set? a) a (hash-set a))
+        b-set (if (set? b) b (hash-set b))]
+    (set (concat a-set b-set))))
+
+(def ^:dynamic *transition-combine* dfa-combine)
+
 ;; ## Transition DSL
 
 (defmacro transitions*
@@ -53,11 +67,14 @@ Additionally, the input entity and the next state are now separated by an arrow 
         (when-not (is-arrow? arrow)
           (e/transition-missing-arrow "" i))))
 
-    `(vector ~@(mapcat 
-                 (fn [[input arrow next-state]]
-                   (vector (resolve-input input)
-                           (resolve-destination next-state k)))
-                     (partition 3 transitions)))))
+    `(mapcat vec
+       (t/resolve-transitions 
+         (vector ~@(mapcat 
+                     (fn [[input arrow next-state]]
+                       (vector (resolve-input input)
+                               (resolve-destination next-state k)))
+                     (partition 3 transitions)))
+         *transition-combine*))))
 
 ;; ## NFA/DFA generation
 ;;
@@ -87,7 +104,8 @@ Additionally, the input entity and the next state are now separated by an arrow 
   `(->
      (~(if (= type :nfa) `n/nfa* `d/dfa*)
        ~@(map (fn [[_ s & t]]
-                `(list* ~s (transitions* ~s ~@t)))
+                `(binding [*transition-combine* ~(if (= type :nfa) nfa-combine dfa-combine)]
+                   (list* ~s (transitions* ~s ~@t))))
               states))
      ~@(map (fn [[_ s & _]]
               `(fsm/accept-in ~s))

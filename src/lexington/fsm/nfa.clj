@@ -141,8 +141,9 @@
             (let [src-state (closure-state-map s)
                   dst-states (set (mapcat (comp #(map closure-state-map %) 
                                                 (fn [s]
-                                                  (let [ts (transitions s)]
-                                                    (or (ts input) (ts t/any)))))
+                                                  (if-let [ts (transitions s)]
+                                                    (or (ts input) (ts t/any))
+                                                    #{})))
                                           src-state))]
               (if-not (empty? dst-states)
                 (assoc-in tt [src-state input] dst-states)
@@ -182,8 +183,9 @@
                 (vec (apply sorted-set
                             (mapcat 
                               (fn [s]
-                                (let [tt (transitions s)]
-                                  (or (tt input) (tt t/any))))
+                                (if-let [tt (transitions s)]
+                                  (or (tt input) (tt t/any))
+                                  #{}))
                               current)))))
             (get-transitions [current]
               (let [inputs (mapcat #(keys (transitions %)) current)]

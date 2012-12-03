@@ -73,7 +73,7 @@ nil). The algorithm used here is thus:
          result []
          current-default nil]
     (if-not (seq pairs)
-      (into {} (map vec result))
+      (into {} result)
       (let [[[e s :as pair] & rst] pairs]
         (if (= any e) 
           (recur rst (conj (filter (comp not #{any} first) result) pair) s)
@@ -99,18 +99,35 @@ The generated sequences will be concatenated in the order they were given. Examp
                                 [(any) :d]])
     ; -> [ [:a :a] [:b :bc] [:c :bc] ... ]
   "
-  [pairs]
-  (mapcat 
-    (fn [[e next-state :as pair]]
-      (cond (set? e) (map #(vector % next-state) e)
-            (fn? e)  (e next-state)
-            :else [pair]))
-    pairs))
+  [pairs combine-fn]
+  (let [expanded-pairs  (mapcat 
+                          (fn [[e next-state :as pair]]
+                            (cond (set? e) (map #(vector % next-state) e)
+                                  (fn? e)  (e next-state)
+                                  :else [pair]))
+                          pairs)
+        combined-pairs (reduce 
+                         (fn [m [e to]]
+                           (if to
+                             (merge-with combine-fn 
+                                         m { e to })
+                             m))
+                         {}
+                         expanded-pairs)]
+    (map (fn [[e to]]
+           (if (or (not to) (= e any))
+             [e to]
+             [e (combined-pairs e)])) expanded-pairs)))
 
-(defn transitions->map
+
+(defn resolve-transitions
   "Convert a sequence of input/next-state pairs to a transition map. The input
    sequence is not specially structured, just a vector `[input state input state ...]`"
-  [transitions]
-  (-> (partition 2 transitions)
-    generate-transition-pairs
-    generate-transition-map))
+  ([transitions] (resolve-transitions
+                   transitions
+                   (fn [current-dest new-dest]
+                     current-dest)))
+  ([transitions combine-fn]
+   (-> (partition 2 transitions)
+     (generate-transition-pairs combine-fn)
+     generate-transition-map)))
