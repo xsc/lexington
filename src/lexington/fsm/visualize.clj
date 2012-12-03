@@ -21,6 +21,13 @@
     {}
     transitions))
 
+(defn- node-name
+  "Generate node name from keyword or set of keywords."
+  [s]
+  (if (set? s)
+    (keyword (string/join "," (map name s)))
+    s))
+
 (defn fsm->dot
   "Convert FSM to GraphViz Dot format."
   [fsm]
@@ -34,13 +41,14 @@
            [:__init { :style "invisible" :height "0.1" :width "0.1" }]]
 
           (map (fn [s]
-                 (cond (accept s)
-                       [s { :color "darkgreen" :fontcolor "darkgreen" :style "bold" }]
-                       (reject s)
-                       [s { :color "red" :fontcolor "red" :style "bold" }]
-                       :else s))
+                 (let [sn (node-name s)]
+                   (cond (accept s)
+                         [sn { :color "darkgreen" :fontcolor "darkgreen" :style "bold" }]
+                         (reject s)
+                         [sn { :color "red" :fontcolor "red" :style "bold" }]
+                         :else sn)))
                (filter #(not (= % s/reject!)) states))
-          [[:__init initial { :dir :forward }]]
+          [[:__init (node-name initial) { :dir :forward }]]
           (mapcat
             (fn [[from to-map]]
               (let [ct (collect-transitions to-map)]
@@ -48,7 +56,7 @@
                         (map (fn [[to es]]
                                (when-not (= to s/reject!)
                                  (let [label (string/join "," (map #(if (= % t/any) "*" (str %)) es))]
-                                   [from to { :dir :forward :label label }])))
+                                   [(node-name from) (node-name to) { :dir :forward :label label }])))
                              ct))))
             transitions)))
       dot)))
