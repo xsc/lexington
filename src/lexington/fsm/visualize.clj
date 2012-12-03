@@ -24,8 +24,8 @@
 (defn- node-name
   "Generate node name from keyword or set of keywords."
   [s]
-  (if (set? s)
-    (keyword (string/join "," (map name s)))
+  (if (or (vector? s) (set? s))
+    (keyword (str "-" (string/join "," (map (comp name node-name) s)) "-" ))
     s))
 
 (defn fsm->dot
