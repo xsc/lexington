@@ -196,7 +196,7 @@
 
 (defn fsm-reindex
   "Rename states to `state-x` where `state-0` is the initial state."
-  ([fsm] (reindex-fsm fsm #(= % #{s/reject!}) #(= % #{s/accept!})))
+  ([fsm] (fsm-reindex fsm #(= % #{s/reject!}) #(= % #{s/accept!})))
   ([fsm reject-state? accept-state?]
    (let [{:keys[accept reject states transitions initial] :as nfa} (fsm->nfa fsm)]
      (let [state-map (zipmap 
