@@ -4,28 +4,62 @@
   (:require [lexington.fsm.states :as s]
             [lexington.fsm.transitions :as t]
             [lexington.fsm.errors :as e]
-            [lexington.fsm.fsm :as fsm]
             [lexington.fsm.nfa :as n :only [nfa*]]
             [lexington.fsm.dfa :as d :only [dfa*]]))
 
-;; ## Combining of Transitions 
+;; ## FSM Structure
+;;
+;; A FSM is represented as a map with the following keys:
+;; - `:states`      : a set of all the states available
+;; - `:initial`     : the starting state
+;; - `:accept`      : a set of all states that let the FSM accept the input (if applicable)
+;; - `:transitions` : a nested hash map `{ :current-state { <input> <next-states> } }`
+;; Depending on whether we want to have a DFA or an NFA the transition map will either
+;; contain single target states or sets of target states.
 
-(defn dfa-combine
-  [a b]
-  a)
+(defn accept-in
+  "Add accepting state to FSM."
+  [{:keys[accept states] :as fsm} & state-list]
+  (reduce 
+    (fn [fsm state]
+      (if-not state
+        fsm
+        (-> fsm
+          (assoc :accept (conj (set accept) state))
+          (assoc :states (conj (set states) state)))))
+    fsm
+    state-list))
 
-(defn nfa-combine
+(defn accept-empty
+  "Let the FSM accept empty inputs."
+  [{:keys[initial] :as fsm}]
+  (accept-in fsm initial))
+
+(defn initial-state
+  "Set initial state of FSM."
+  [{:keys[initial states] :as fsm} state]
+  (if-not state
+    fsm
+    (-> fsm
+      (assoc :initial state)
+      (assoc :states (conj (set states) state)))))
+
+;; ## Transition DSL
+
+(defn nfa-combine 
+  "Transition combination function for NFAs."
   [a b]
   (let [a-set (if (set? a) a (hash-set a))
         b-set (if (set? b) b (hash-set b))]
     (set (concat a-set b-set))))
 
-(def ^:dynamic *transition-combine* dfa-combine)
+(defn dfa-combine 
+  "Transition combination function for DFAs."
+  [a b] 
+  a)
 
-;; ## Transition DSL
-
-(defmacro transitions*
-  "The `transitions*` macro can be used for state generation. It introduces shorthands for the 
+(defmacro state*
+  "The `state*` macro can be used for state generation. It introduces shorthands for the 
 different special transitions and target states:
 
 - `(:not ...)` represents the `(except ...)` transition
@@ -35,13 +69,13 @@ different special transitions and target states:
 - `_` represents the `any` transition or the `continue!` destination state
 Additionally, the input entity and the next state are now separated by an arrow `->`. Example:
     
-    (transitions*
-      (:not 'a 'b 'c) -> :a
+    (state* :dfa :state-a
+      (:not 'a 'b 'c) -> :state-a
       (:or 'b 'c)     -> :accept!
-      _               -> :f)
+      _               -> :state-f)
 
   "
-  [k & transitions]
+  [type k & transitions]
   (letfn [(is-underscore? [x]
             (and (symbol? x) (= (name x) "_")))
           (is-arrow? [x]
@@ -55,8 +89,8 @@ Additionally, the input entity and the next state are now separated by an arrow 
               (if (is-underscore? i) 
                 `t/any
                 i)))
-          (resolve-destination [d x]
-            (cond (is-underscore? d) x
+          (resolve-destination [d]
+            (cond (is-underscore? d) k
                   (= d :accept!) `s/accept!
                   (= d :reject!) `s/reject!
                   :else d))]
@@ -72,9 +106,9 @@ Additionally, the input entity and the next state are now separated by an arrow 
          (vector ~@(mapcat 
                      (fn [[input arrow next-state]]
                        (vector (resolve-input input)
-                               (resolve-destination next-state k)))
+                               (resolve-destination next-state)))
                      (partition 3 transitions)))
-         *transition-combine*))))
+         ~(if (= :dfa type) `dfa-combine `nfa-combine)))))
 
 ;; ## NFA/DFA generation
 ;;
@@ -101,16 +135,21 @@ Additionally, the input entity and the next state are now separated by an arrow 
 (defmacro new-fsm
   "Create new FSM based on the given type and a series of states."
   [type & states]
+  (let [create-fsm (case type
+                     :nfa `n/nfa*
+                     :dfa `d/dfa*
+                     `d/dfa*)
+        accept-state? (fn [[k & _]] 
+                        (= k :accept))
+        state-lists (map (fn [[_ s & t]]
+                           `(list* ~s (state* ~type ~s ~@t))) states)
+        accept-states `(accept-in ~@(->> 
+                                      (filter accept-state? states)
+                                      (map second)))]
   `(->
-     (~(if (= type :nfa) `n/nfa* `d/dfa*)
-       ~@(map (fn [[_ s & t]]
-                `(binding [*transition-combine* ~(if (= type :nfa) nfa-combine dfa-combine)]
-                   (list* ~s (transitions* ~s ~@t))))
-              states))
-     ~@(map (fn [[_ s & _]]
-              `(fsm/accept-in ~s))
-            (filter (fn [[k & _]] 
-                      (= k :accept-state)) states))))
+     (~create-fsm
+        ~@state-lists)
+      ~accept-states)))
 
 (defmacro nfa
   "Create NFA from series of states."

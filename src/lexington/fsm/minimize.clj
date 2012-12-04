@@ -4,7 +4,7 @@
   (:use [clojure.set :as sets]
         [lexington.fsm.transitions :as t :only [any]]
         [lexington.fsm.states :as s :only [reject! accept!]]
-        [lexington.fsm.fsm :only [reindex-fsm]]))
+        [lexington.fsm.utils :only [fsm-reindex]]))
 
 ;; ## Minimization
 ;;
@@ -122,7 +122,7 @@
                         (assoc :initial (rename-map initial))
                         (assoc :transitions (rename-transitions rename-map transitions)))
         dead-states (find-dead-states minimized-fsm)]
-    (reindex-fsm minimized-fsm
+    (fsm-reindex minimized-fsm
                  (fn [s]
                    (or (= s s/reject!)
                        (dead-states s)))

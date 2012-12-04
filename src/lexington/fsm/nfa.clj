@@ -3,8 +3,7 @@
   lexington.fsm.nfa
   (:use [lexington.fsm.transitions :as t :only [any]]
         [lexington.fsm.states :as s :only [reject! accept!]]
-        [lexington.fsm.helpers :only [into-map remap]]
-        lexington.fsm.fsm))
+        lexington.fsm.utils))
 
 ;; ## Structure
 ;;
@@ -72,17 +71,17 @@
 (defn loop0-nfa
   "Create looping NFA by adding epsilon transitions from each accepting state 
    to the initial one. Also, make the initial state accepting."
-  [{:keys[initial] :as nfa}]
+  [{:keys[initial accept] :as nfa}]
   (-> nfa
     (loop-nfa)
-    (accept-empty)))
+    (assoc :accept (conj (set accept) initial))))
 
 (defn concat-nfa
   "Create concatenation of NFAs by adding epsilon transitions from each accepting state
    to the following NFA's initial one."
   [& nfas]
   (let [nfas (map-indexed (fn [i nfa] 
-                            (prefix-fsm-states nfa (str "x" i "-")))
+                            (fsm-prefix-states nfa (str "x" i "-")))
                           nfas)]
     (reduce
       (fn [{s1 :states a1 :accept i1 :initial :as nfa} 
@@ -102,7 +101,7 @@
    initial states of all given NFAs."
   [& nfas]
   (let [nfas (map-indexed (fn [i nfa] 
-                            (prefix-fsm-states nfa (str "x" (inc i) "-")))
+                            (fsm-prefix-states nfa (str "x" (inc i) "-")))
                           nfas)
         ix :x0]
     (reduce
@@ -112,7 +111,7 @@
           (assoc :accept (set (concat (:accept nfa) accept)))
           (assoc :transitions (merge (:transitions nfa) transitions))
           (nfa-add-epsilon ix initial)))
-      (initial-state {} ix)
+      { :initial ix }
       nfas)))
 
 ;; ## Epsilon-NFA to NFA
@@ -168,7 +167,7 @@
       (assoc :accept closure-accept)
       (assoc :initial (closure-state-map initial))
       (assoc :transitions closure-trans)
-      (reindex-fsm
+      (fsm-reindex
         nfa-reject-state?
         nfa-accept-state?))))
 
@@ -205,9 +204,9 @@
             (assoc :accept (set (filter (fn [x] (some (set accept) x)) states)))
             (assoc :reject (set (filter (fn [x] 
                                           (not (some (comp not (set reject)) x))) states)))
-            (reindex-fsm 
-              nfa-reject-state?
-              nfa-accept-state?))
+            (fsm-reindex 
+              #(not (some (comp not #{s/reject!}) %))
+              #(not (some (comp not #{s/accept!}) %))))
           (let [child-transitions (map get-transitions remaining-states)
                 child-states (filter (comp not states) (mapcat vals child-transitions))]
             (recur (set (concat states child-states))
@@ -219,16 +218,5 @@
 (defn dfa->nfa
   "Convert DFA to NFA by replacing target states with sets containing the single
    target state."
-  [{:keys[transitions] :as dfa}]
-  (let [transitions* (-> transitions
-                       (remap
-                         (fn [to-table]
-                           (-> to-table
-                             (remap 
-                               (fn [to]
-                                 (if (set? to)
-                                   to
-                                   (hash-set to))))
-                             (into-map))))
-                       (into-map))]
-    (assoc dfa :transitions transitions*)))
+  [dfa]
+  (fsm->nfa dfa))

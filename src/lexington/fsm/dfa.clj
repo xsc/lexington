@@ -5,7 +5,7 @@
         [lexington.fsm.states :as s :only [accept! reject!]]
         [lexington.fsm.transitions :as t :only [any]]
         [lexington.fsm.errors :as e]
-        lexington.fsm.fsm))
+        [lexington.fsm.utils :only [fsm-reindex fsm-remove-unreachable-states]]))
 
 ;; ## DFA Structure
 ;;
@@ -96,8 +96,8 @@
         (assoc :transitions transitions)
         (assoc :accept (set accept))
         (assoc :reject #{})
-        remove-unreachable-states
-        (reindex-fsm #(= % [s/reject! s/reject!])
+        fsm-remove-unreachable-states
+        (fsm-reindex #(= % [s/reject! s/reject!])
                      #(= % [s/accept! s/accept!]))))))
 
 (def intersect-dfa

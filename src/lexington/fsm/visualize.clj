@@ -6,7 +6,9 @@
         [lexington.fsm.transitions :as t]
         [lexington.fsm.states :as s]
         [lexington.fsm.nfa :as nfa :only [epsi]]
-        lexington.fsm.fsm))
+        lexington.fsm.utils))
+
+;; ## Helpers
 
 (defn- collect-transitions
   "Convert a map of `{ <input> :next-state ... }` to `{ :next-state [<input> ...] ... }`"
@@ -29,42 +31,84 @@
     (keyword (str "-" (string/join "," (map (comp name node-name) s)) "-" ))
     s))
 
+;; ## GraphViz Styles
+
+(def ^:const ^:private NODE_STYLE
+  { :shape :ellipse 
+    :height "0.8"
+    :width "0.8"
+    :fontsize "8pt"
+    :fixedsize "true" })
+
+(def ^:const ^:private EDGE_STYLE
+  { :fontsize "8pt"
+    :dir :forward })
+
+(def ^:const ^:private INIT_STYLE
+  { :style :invisible
+    :height "0.05"
+    :width "0.05" })
+
+(def ^:const ^:private ACCEPT_STYLE
+  { :shape :doublecircle
+    :color :darkgreen
+    :fontcolor :darkgreen
+    :height "0.7"
+    :width "0.7" })
+
+(def ^:const ^:private REJECT_STYLE
+  { :shape :doublecircle
+    :color :red
+    :fontcolor :red
+    :height "0.7"
+    :width "0.7" })
+
+;; ## GraphViz Generation Functions
+
 (defn fsm->dot
   "Convert FSM to GraphViz Dot format."
   [fsm]
-  (let [{:keys[accept reject states transitions initial]} (remove-unreachable-states fsm)]
-    (-> 
-      (graph 
-        (concat
-          [(graph-attrs { :rankdir "LR" })
-           (node-attrs { :shape :ellipse :height "0.8" :width "0.8" :fontsize "8pt" :fixedsize "true" })
-           (edge-attrs { :fontsize "8pt" })
-           [:__init { :style "invisible" :height "0.1" :width "0.1" }]]
-
-          (map (fn [s]
-                 (let [sn (node-name s)]
-                   (cond (accept s)
-                         [sn { :color "darkgreen" :fontcolor "darkgreen" :style "bold" }]
-                         (reject s)
-                         [sn { :color "red" :fontcolor "red" :style "bold" }]
-                         :else sn)))
-               (filter #(not (= % s/reject!)) states))
-          [[:__init (node-name initial) { :dir :forward }]]
-          (mapcat
-            (fn [[from to-map]]
+  (let [{:keys[accept reject states transitions initial]} (fsm-remove-unreachable-states fsm)
+        init-node (keyword (gensym))]
+    (letfn [(generate-node [s]
+              (when-not (= s s/reject!)
+                (let [sn (node-name s)]
+                  (cond ((set accept) s) [sn ACCEPT_STYLE]
+                        ((set reject) s) [sn REJECT_STYLE]
+                        :else [sn]))))
+            (generate-edges [from to-map]
               (let [ct (collect-transitions to-map)]
-                (filter (comp not nil?)
-                        (map (fn [[to es]]
-                               (when-not (= to s/reject!)
-                                 (let [label (string/join "," 
-                                                          (map (fn [e]
-                                                                 (cond (= e t/any) "*"
-                                                                       (= e nfa/epsi) "\u03f5"
-                                                                       :else (str e))) es))]
-                                   [(node-name from) (node-name to) { :dir :forward :label label }])))
-                             ct))))
-            transitions)))
-      dot)))
+                (->> ct
+                  (map 
+                    (fn [[to es]]
+                      (when-not (= to s/reject!)
+                        (let [label (->>
+                                      (map (fn [e]
+                                             (cond (= e t/any) "*"
+                                                   (= e nfa/epsi) "\u03f5"
+                                                   :else (str e))) es)
+                                      (string/join ","))]
+                          (vector
+                            (node-name from)
+                            (node-name to)
+                            { :label label })))))
+                  (filter (comp not nil?)))))]
+      (-> 
+        (graph
+          (concat
+            [(graph-attrs { :rankdir "LR" })
+             (node-attrs NODE_STYLE)
+             (edge-attrs EDGE_STYLE)
+             [init-node INIT_STYLE]]
+            (->> states
+              (map generate-node)
+              (filter (comp not nil?)))
+            [[init-node (node-name initial)]]
+            (mapcat (fn [[from to]]
+                      (generate-edges from to)) transitions)))
+        dot))))
+
+;; ## Presentation Functions
 
 (defn show-fsm!
   "Open Dorothy Window to display the FSM."

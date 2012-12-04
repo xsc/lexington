@@ -2,9 +2,10 @@
        :author "Yannick Scherer" }
   lexington.fsm.nfa-tests
   (:use clojure.test
-        lexington.fsm.nfa))
+        lexington.fsm.nfa
+        [lexington.fsm.core :only [accept-in accept-empty]]))
 
-(deftest nfa-structure
+(deftest nfa-generation
   (testing "nfa-add"
     (let [nfa (-> {}
                (nfa-add :a 0 :b)
@@ -30,3 +31,16 @@
            :b 1    #{:a :b}
            :b epsi #{:c})))
 )
+
+(def abc-nfa
+  (->
+    (nfa*
+      [:a \a :a epsi :b]
+      [:b \b :b epsi :c]
+      [:c \c :c])
+    (accept-in :b :c)))
+
+(deftest nfa-combination
+  (testing "loop-nfa"
+    (let [nfa (loop-nfa abc-nfa)]
+      (is (= 
