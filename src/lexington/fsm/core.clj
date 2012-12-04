@@ -19,9 +19,9 @@
 
 (defn accept-in
   "Add accepting state to FSM."
-  [{:keys[accept states] :as fsm} & state-list]
+  [fsm & state-list]
   (reduce 
-    (fn [fsm state]
+    (fn [{:keys[accept states] :as fsm} state]
       (if-not state
         fsm
         (-> fsm

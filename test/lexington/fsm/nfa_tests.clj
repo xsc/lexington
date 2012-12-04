@@ -3,6 +3,7 @@
   lexington.fsm.nfa-tests
   (:use clojure.test
         lexington.fsm.nfa
+        lexington.fsm.utils
         [lexington.fsm.core :only [accept-in accept-empty]]))
 
 (deftest nfa-generation
@@ -43,4 +44,11 @@
 (deftest nfa-combination
   (testing "loop-nfa"
     (let [nfa (loop-nfa abc-nfa)]
-      (is (= 
+      (is (some #{epsi} (fsm-transition-inputs nfa :b :a)))
+      (is (some #{epsi} (fsm-transition-inputs nfa :c :a)))))
+  (testing "loop0-nfa"
+    (let [nfa (loop0-nfa abc-nfa)]
+      (is (some #{epsi} (fsm-transition-inputs nfa :b :a)))
+      (is (some #{epsi} (fsm-transition-inputs nfa :c :a)))
+      (is (contains? (set (:accept nfa)) :a))))
+)
