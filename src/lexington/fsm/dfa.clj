@@ -5,21 +5,12 @@
         [lexington.fsm.states :as s :only [accept! reject!]]
         [lexington.fsm.transitions :as t :only [any]]
         [lexington.fsm.errors :as e]
-        [lexington.fsm.utils :only [fsm-reindex fsm-remove-unreachable-states]]))
+        [lexington.fsm.utils :only [fsm-reindex fsm-remove-unreachable-states]]
+        lexington.fsm.core))
 
 ;; ## DFA Structure
 ;;
 ;; DFAs have a single destination state for each state and input.
-
-(defn dfa-add
-  "Add DFA transition. This will replace any existing transition for the
-   given state and input."
-  [{:keys[transitions states initial] :as dfa} from input to]
-  (let [current-transitions (get-in transitions [from input])]
-    (-> dfa
-      (assoc-in [:transitions from input] to)
-      (assoc :states (conj (conj (set states) to) from))
-      (assoc :initial (or initial from)))))
 
 (defn dfa-reject-state?
   [s]
@@ -28,21 +19,6 @@
 (defn dfa-accept-state?
   [s]
   (= s s/accept!))
-
-(defn dfa*
-  "Create DFA from a list of transition vectors. A transition vector
-   consists of the source state and a list of input/next-state pairs."
-  [& transitions]
-  (reduce
-    (fn [dfa [src-state & trv]]
-      (let [pairs (partition 2 trv)]
-        (reduce 
-          (fn [dfa [input dst-state]]
-            (dfa-add dfa src-state input dst-state))
-          dfa
-          pairs)))
-    {}
-    transitions))
 
 ;; ## Simple Transformations
 

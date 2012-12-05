@@ -4,7 +4,7 @@
   (:use clojure.test
         lexington.fsm.nfa
         lexington.fsm.utils
-        [lexington.fsm.core :only [accept-in accept-empty]]))
+        lexington.fsm.core))
 
 (deftest nfa-generation
   (testing "nfa-add"

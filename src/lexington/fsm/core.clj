@@ -4,8 +4,7 @@
   (:require [lexington.fsm.states :as s]
             [lexington.fsm.transitions :as t]
             [lexington.fsm.errors :as e]
-            [lexington.fsm.nfa :as n :only [nfa*]]
-            [lexington.fsm.dfa :as d :only [dfa*]]))
+            lexington.fsm.utils))
 
 ;; ## FSM Structure
 ;;
@@ -13,9 +12,95 @@
 ;; - `:states`      : a set of all the states available
 ;; - `:initial`     : the starting state
 ;; - `:accept`      : a set of all states that let the FSM accept the input (if applicable)
-;; - `:transitions` : a nested hash map `{ :current-state { <input> <next-states> } }`
-;; Depending on whether we want to have a DFA or an NFA the transition map will either
-;; contain single target states or sets of target states.
+;; - `:transitions` : a nested hash map `{ :current-state { <input> #{<next-states>} } }`
+;; Whether the FSM is a DFA or an NFA depends only on the contents of the target state sets:
+;; if there is any set that contains more than one state, it's an NFA; DFA otherwise.
+
+;; ### NFA
+
+(def ^:const epsi ::epsilon)
+
+(defn nfa-add
+  "Add Transition to NFA."
+  [{:keys[transitions states initial] :as nfa} from input to]
+  (let [current-transitions (or (get-in transitions [from input]) #{})
+        to-set (if (set? to) to (hash-set to))]
+    (-> nfa
+      (assoc-in [:transitions from input]
+                (if (set? current-transitions)
+                  (set (concat to-set current-transitions))
+                  (conj to-set current-transitions)))
+      (assoc :states (set (concat to-set (conj (set states) from))))
+      (assoc :initial (or initial from)))))
+
+(defn nfa-add-epsilon
+  "Add Epsilon Transition to NFA."
+  [nfa from to]
+  (nfa-add nfa from epsi to))
+
+(defn nfa*
+  "Create NFA from a list of transition vectors. A transition vector
+   consists of the source state and a list of input/next-state pairs."
+  [& transitions]
+  (reduce
+    (fn [nfa [src-state & trv]]
+      (let [pairs (partition 2 trv)]
+        (reduce 
+          (fn [nfa [input dst-state]]
+            (nfa-add nfa src-state input dst-state))
+          nfa
+          pairs)))
+    {}
+    transitions))
+
+;; ### DFA
+
+(defn dfa-add
+  "Add DFA transition. This will replace any existing transition for the
+   given state and input."
+  [{:keys[transitions states initial] :as dfa} from input to]
+  (let [current-transitions (get-in transitions [from input])]
+    (-> dfa
+      (assoc-in [:transitions from input] (hash-set to))
+      (assoc :states (conj (conj (set states) to) from))
+      (assoc :initial (or initial from)))))
+
+(defn dfa*
+  "Create DFA from a list of transition vectors. A transition vector
+   consists of the source state and a list of input/next-state pairs."
+  [& transitions]
+  (reduce
+    (fn [dfa [src-state & trv]]
+      (let [pairs (partition 2 trv)]
+        (reduce 
+          (fn [dfa [input dst-state]]
+            (dfa-add dfa src-state input dst-state))
+          dfa
+          pairs)))
+    {}
+    transitions))
+
+;; ### Check Type of FSM
+
+(defn epsilon-nfa?
+  "Check if a given FSM is an epsilon-NFA."
+  [{:keys[transitions]}]
+  (some #(= % epsi)
+        (mapcat keys (vals transitions))))
+
+(defn nfa?
+  "Check if a given FSM is an NFA."
+  [{:keys[transitions] :as fsm}]
+  (or (epsilon-nfa? fsm)
+      (some (comp seq rest) 
+            (mapcat vals (vals transitions)))))
+
+(defn dfa?
+  "Check if a given FSM is a DFA."
+  [fsm]
+  (not (nfa? fsm)))
+
+;; ### Common Operations
 
 (defn accept-in
   "Add accepting state to FSM."
@@ -136,9 +221,9 @@ Additionally, the input entity and the next state are now separated by an arrow 
   "Create new FSM based on the given type and a series of states."
   [type & states]
   (let [create-fsm (case type
-                     :nfa `n/nfa*
-                     :dfa `d/dfa*
-                     `d/dfa*)
+                     :nfa `nfa*
+                     :dfa `dfa*
+                     `dfa*)
         accept-state? (fn [[k & _]] 
                         (= k :accept))
         state-lists (map (fn [[_ s & t]]

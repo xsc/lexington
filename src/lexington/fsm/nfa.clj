@@ -3,6 +3,7 @@
   lexington.fsm.nfa
   (:use [lexington.fsm.transitions :as t :only [any]]
         [lexington.fsm.states :as s :only [reject! accept!]]
+        lexington.fsm.core
         lexington.fsm.utils))
 
 ;; ## Structure
@@ -10,26 +11,6 @@
 ;; An NFA can have multiple target states for a single input, which are
 ;; represented as sets in the transition table. Epsilon Transitions are
 ;; allowed (represented by nil input)
-
-(def ^:const epsi ::epsilon)
-
-(defn nfa-add
-  "Add Transition to NFA."
-  [{:keys[transitions states initial] :as nfa} from input to]
-  (let [current-transitions (or (get-in transitions [from input]) #{})
-        to-set (if (set? to) to (hash-set to))]
-    (-> nfa
-      (assoc-in [:transitions from input]
-                (if (set? current-transitions)
-                  (set (concat to-set current-transitions))
-                  (conj to-set current-transitions)))
-      (assoc :states (set (concat to-set (conj (set states) from))))
-      (assoc :initial (or initial from)))))
-
-(defn nfa-add-epsilon
-  "Add Epsilon Transition to NFA."
-  [nfa from to]
-  (nfa-add nfa from epsi to))
 
 (defn nfa-reject-state?
   "Is the default reject state?"
@@ -40,21 +21,6 @@
   "Is the default accept state?"
   [state-set]
   (= #{s/accept!} state-set))
-
-(defn nfa*
-  "Create NFA from a list of transition vectors. A transition vector
-   consists of the source state and a list of input/next-state pairs."
-  [& transitions]
-  (reduce
-    (fn [nfa [src-state & trv]]
-      (let [pairs (partition 2 trv)]
-        (reduce 
-          (fn [nfa [input dst-state]]
-            (nfa-add nfa src-state input dst-state))
-          nfa
-          pairs)))
-    {}
-    transitions))
 
 ;; ## NFA Combination
 
@@ -155,68 +121,64 @@
 (defn epsilon-nfa->nfa
   "Resolve Epsilon Transitions by merging the epsilon targets with the epsilon source."
   [{:keys[transitions initial states accept] :as nfa}]
-  (let [alphabet (mapcat keys (vals transitions))
-        closure-state-map (into {} 
-                            (for [s states]
-                              (vector s (epsilon-closure-state transitions s))))
-        closure-states (vals closure-state-map)
-        closure-accept (set (filter (partial some (set accept)) closure-states))
-        closure-trans (epsilon-closure-transitions transitions alphabet closure-state-map)]
-    (-> {}
-      (assoc :states closure-states)
-      (assoc :accept closure-accept)
-      (assoc :initial (closure-state-map initial))
-      (assoc :transitions closure-trans)
-      (fsm-reindex
-        nfa-reject-state?
-        nfa-accept-state?))))
+  (if-not (epsilon-nfa? nfa)
+    nfa
+    (let [alphabet (mapcat keys (vals transitions))
+          closure-state-map (into {} 
+                                  (for [s states]
+                                    (vector s (epsilon-closure-state transitions s))))
+          closure-states (vals closure-state-map)
+          closure-accept (set (filter (partial some (set accept)) closure-states))
+          closure-trans (epsilon-closure-transitions transitions alphabet closure-state-map)]
+      (-> {}
+        (assoc :states closure-states)
+        (assoc :accept closure-accept)
+        (assoc :initial (closure-state-map initial))
+        (assoc :transitions closure-trans)
+        (fsm-reindex
+          nfa-reject-state?
+          nfa-accept-state?)))))
 
 ;; ## NFA to DFA
 
 (defn nfa->dfa
   "Convert NFA to DFA by creating 'set-states' and transitions between them."
-  [nfa]
-  (let [{:keys[accept reject initial transitions] :as nfa} (epsilon-nfa->nfa nfa)]
-    (letfn [(next-state [current input]
-              (let [current (if (vector? current) current (vector current))]
-                (vec (apply sorted-set
-                            (mapcat 
-                              (fn [s]
-                                (if-let [tt (transitions s)]
-                                  (or (tt input) (tt t/any))
-                                  #{}))
-                              current)))))
-            (get-transitions [current]
-              (let [inputs (mapcat #(keys (transitions %)) current)]
-                (reduce
-                  (fn [t input]
-                    (assoc t input (next-state current input)))
-                  {}
-                  inputs)))]
-      (loop [states      #{[initial]}
-             transitions (assoc {} [initial] (transitions initial))
-             remaining-states [[initial]]]
-        (if-not (seq remaining-states)
-          (-> {}
-            (assoc :initial [initial])
-            (assoc :transitions transitions)
-            (assoc :states states)
-            (assoc :accept (set (filter (fn [x] (some (set accept) x)) states)))
-            (assoc :reject (set (filter (fn [x] 
-                                          (not (some (comp not (set reject)) x))) states)))
-            (fsm-reindex 
-              #(not (some (comp not #{s/reject!}) %))
-              #(not (some (comp not #{s/accept!}) %))))
-          (let [child-transitions (map get-transitions remaining-states)
-                child-states (filter (comp not states) (mapcat vals child-transitions))]
-            (recur (set (concat states child-states))
-                   (merge transitions (zipmap remaining-states child-transitions))
-                   child-states)))))))
-
-;; ## DFA to NFA
-
-(defn dfa->nfa
-  "Convert DFA to NFA by replacing target states with sets containing the single
-   target state."
-  [dfa]
-  (fsm->nfa dfa))
+  [fsm]
+  (if-not (nfa? fsm)
+    fsm
+    (let [{:keys[accept reject initial transitions] :as nfa} (epsilon-nfa->nfa fsm)]
+      (letfn [(next-state [current input]
+                (let [current (if (vector? current) current (vector current))]
+                  (vec (apply sorted-set
+                              (mapcat 
+                                (fn [s]
+                                  (if-let [tt (transitions s)]
+                                    (or (tt input) (tt t/any))
+                                    #{}))
+                                current)))))
+              (get-transitions [current]
+                (let [inputs (mapcat #(keys (transitions %)) current)]
+                  (reduce
+                    (fn [t input]
+                      (assoc t input (next-state current input)))
+                    {}
+                    inputs)))]
+        (loop [states      #{[initial]}
+               transitions (assoc {} [initial] (transitions initial))
+               remaining-states [[initial]]]
+          (if-not (seq remaining-states)
+            (-> {}
+              (assoc :initial [initial])
+              (assoc :transitions transitions)
+              (assoc :states states)
+              (assoc :accept (set (filter (fn [x] (some (set accept) x)) states)))
+              (assoc :reject (set (filter (fn [x] 
+                                            (not (some (comp not (set reject)) x))) states)))
+              (fsm-reindex 
+                #(not (some (comp not #{s/reject!}) %))
+                #(not (some (comp not #{s/accept!}) %))))
+            (let [child-transitions (map get-transitions remaining-states)
+                  child-states (filter (comp not states) (mapcat vals child-transitions))]
+              (recur (set (concat states child-states))
+                     (merge transitions (zipmap remaining-states child-transitions))
+                     child-states))))))))
