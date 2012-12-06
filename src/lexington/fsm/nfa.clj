@@ -146,39 +146,35 @@
   [fsm]
   (if-not (nfa? fsm)
     fsm
-    (let [{:keys[accept reject initial transitions] :as nfa} (epsilon-nfa->nfa fsm)]
-      (letfn [(next-state [current input]
-                (let [current (if (vector? current) current (vector current))]
-                  (vec (apply sorted-set
-                              (mapcat 
-                                (fn [s]
-                                  (if-let [tt (transitions s)]
-                                    (or (tt input) (tt t/any))
-                                    #{}))
-                                current)))))
-              (get-transitions [current]
-                (let [inputs (mapcat #(keys (transitions %)) current)]
-                  (reduce
-                    (fn [t input]
-                      (assoc t input (next-state current input)))
-                    {}
-                    inputs)))]
-        (loop [states      #{[initial]}
-               transitions (assoc {} [initial] (transitions initial))
-               remaining-states [[initial]]]
-          (if-not (seq remaining-states)
-            (-> {}
-              (assoc :initial [initial])
-              (assoc :transitions transitions)
-              (assoc :states states)
-              (assoc :accept (set (filter (fn [x] (some (set accept) x)) states)))
-              (assoc :reject (set (filter (fn [x] 
-                                            (not (some (comp not (set reject)) x))) states)))
-              (fsm-reindex 
-                #(not (some (comp not #{s/reject!}) %))
-                #(not (some (comp not #{s/accept!}) %))))
-            (let [child-transitions (map get-transitions remaining-states)
-                  child-states (filter (comp not states) (mapcat vals child-transitions))]
-              (recur (set (concat states child-states))
-                     (merge transitions (zipmap remaining-states child-transitions))
-                     child-states))))))))
+    (let [{:keys[accept initial transitions] :as nfa} (epsilon-nfa->nfa fsm)
+          new-initial #{initial}
+          accepting-state? #(some (set accept) %)]
+      (letfn [(next-state-set [current in]
+                (->> current
+                  (mapcat 
+                    (fn [s]
+                      (when-let [tt (transitions s)]
+                        (or (tt in) (tt t/any)))))
+                  set
+                  hash-set))
+              (get-transitions [s]
+                (let [inputs (mapcat (comp keys transitions) s)]
+                  (reduce #(assoc %1 %2 (next-state-set s %2)) {} inputs)))]
+      (loop [states #{new-initial}
+             transitions (hash-map new-initial (transitions initial))
+             remaining-states [new-initial]]
+        (if-not (seq remaining-states)
+          (-> {}
+            (assoc :states states)
+            (assoc :initial new-initial)
+            (assoc :accept (set (filter accepting-state? states)))
+            (assoc :transitions transitions)
+            (fsm-reindex #(= #{s/reject!} %) #(= #{s/accept!} %)))
+          (let [next-transitions (map get-transitions remaining-states)
+                next-states (->>
+                              (mapcat vals next-transitions)
+                              (map (comp first vec))
+                              (filter (comp not states)))]
+            (recur (set (concat states next-states))
+                   (merge transitions (zipmap remaining-states next-transitions))
+                   next-states))))))))

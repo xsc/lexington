@@ -5,22 +5,21 @@
         [clojure.string :as string :only [join]]
         [lexington.fsm.transitions :as t]
         [lexington.fsm.states :as s]
-        [lexington.fsm.nfa :as nfa :only [epsi]]
+        [lexington.fsm.core :only [epsi]]
         lexington.fsm.utils))
 
 ;; ## Helpers
 
 (defn- collect-transitions
-  "Convert a map of `{ <input> :next-state ... }` to `{ :next-state [<input> ...] ... }`"
+  "Convert a map of `{ <input> #{:next-state ...} ... }` to `{ :next-state [<input> ...] ... }`"
   [transitions]
   (reduce
     (fn [tr [e to]]
-      (let [to (if (set? to) to (hash-set to))]
-        (reduce
-          (fn [m t]
-            (merge-with concat m { t [e] }))
-          tr
-          to)))
+      (reduce
+        (fn [m t]
+          (merge-with concat m { t [e] }))
+        tr
+        to))
     {}
     transitions))
 
@@ -85,7 +84,7 @@
                         (let [label (->>
                                       (map (fn [e]
                                              (cond (= e t/any) "*"
-                                                   (= e nfa/epsi) "\u03f5"
+                                                   (= e epsi) "\u03f5"
                                                    :else (str e))) es)
                                       (string/join ","))]
                           (vector
