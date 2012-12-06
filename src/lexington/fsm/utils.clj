@@ -45,21 +45,39 @@
 
 ;; ## Reachable/Unreachable/Dead States
 
+(defn fsm-state-seq
+  "Get possibly infinite seq of state sets starting from a given root state. Each
+   set contains all the states reachable from any of the previous set's states."
+  ([fsm] (fsm-state-seq fsm (:initial fsm)))
+  ([fsm root]
+   (let [get-next-states (partial fsm-next-states fsm)]
+     (letfn [(lazy-bfs [current-states]
+               (lazy-seq
+                 (when (seq current-states)
+                   (let [next-states (mapcat get-next-states current-states)]
+                     (cons current-states (lazy-bfs (set next-states)))))))]
+       (lazy-bfs #{root})))))
+
+(defn fsm-reachable-state-seq
+  "Get seq of states reachable from a given root state. (breadth-frist-search)"
+  ([fsm] (fsm-reachable-state-seq fsm (:initial fsm)))
+  ([fsm root]
+   (letfn [(lazy-reachable [state-seq visited-states]
+             (lazy-seq
+               (let [[current-states & next-seq] state-seq
+                     current-states (filter (comp not visited-states) current-states)]
+                 (when (seq current-states)
+                   (concat 
+                     current-states
+                     (lazy-reachable next-seq (set (concat visited-states current-states))))))))]
+     (lazy-reachable
+       (fsm-state-seq fsm root)
+       #{}))))
+
 (defn fsm-reachable-states
   "Get set of states reachable from a given root state."
   ([fsm] (fsm-reachable-states fsm (:initial fsm)))
-  ([fsm root]
-   (let [get-next-states (partial fsm-next-states fsm)] 
-     (loop [current-states [root]
-            visited-states-ordered []
-            visited-states #{}]
-       (if-not (seq current-states)
-         visited-states-ordered
-         (let [next-states (filter (comp not visited-states)
-                                   (mapcat get-next-states current-states))]
-           (recur next-states
-                  (concat visited-states-ordered current-states)
-                  (set (concat visited-states current-states)))))))))
+  ([fsm root] (set (fsm-reachable-state-seq fsm root))))
 
 (defn fsm-unreachable-states
   "Get set of states unreachable from a given root state."
@@ -170,7 +188,7 @@
   ([fsm] (fsm-reindex fsm #(= % #{s/reject!}) #(= % #{s/accept!})))
   ([{:keys[accept states transitions initial] :as fsm} reject-state? accept-state?]
    (let [state-map (zipmap 
-                     (filter (comp not reject-state?) (fsm-reachable-states fsm initial))
+                     (filter (comp not reject-state?) (fsm-reachable-state-seq fsm initial))
                      (for [i (range)] (keyword (str "state-" i))))]
      (fsm-rename-states fsm (fn [s]
                               (cond (reject-state? s) s/reject!
