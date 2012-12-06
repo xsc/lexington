@@ -22,30 +22,29 @@
 
 ;; ## Simple Transformations
 
+(defn- prepare-fsm
+  "Prepare FSM to enable unified state handling in cartesian product, inversion, etc...
+   Makes e.g. checks if the `reject!` state is available unnecessary."
+  [fsm]
+  (-> fsm
+    n/nfa->dfa
+    fsm-normalize))
+
 (defn invert-dfa
   "Create a DFA that does accept everything not accepted by the given one. This
    is done by switching the accepting states with all non-accepting states and replacing
    the `reject!` state with the `accept!` one."
   [{:keys[accept states] :as dfa}]
   (-> dfa
-    fsm-normalize
+    prepare-fsm
     (fsm-rename-single-state s/reject! s/accept!)
     (assoc :reject #{})
     (assoc :accept (->> states
                      (filter (comp not (set accept)))
                      (cons s/accept!)
                      set))))
-                     
 
 ;; ## Cartesian Product
-
-(defn- prepare-fsm
-  "Prepare FSM to enable unified state handling in cartesian product.
-   Makes e.g. checks if the `reject!` state is available unnecessary."
-  [fsm]
-  (-> fsm
-    nfa->dfa
-    fsm-normalize))
 
 (defn- cartesian-product-transitions
   "Create transition map for cartesian product."
