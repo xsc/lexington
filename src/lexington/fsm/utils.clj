@@ -87,15 +87,14 @@
      (filter (comp not reachable?) states))))
 
 (defn fsm-dead-states
-  "Get set of non-accepting states that only lead to the reject state or themselves."
+  "Get set of non-accepting states that only lead to other non-accepting states."
   [{:keys[states accept] :as fsm}]
-  (let [accept? (set accept)]
-    (set (filter
-           (fn [s]
-             (not (or (accept? s)
-                      (some (comp not #{s/reject! s}) 
-                            (fsm-next-states fsm s)))))
-           states))))
+  (let [accept? (set accept)
+        dead-state? (fn [s]
+                      (not 
+                        (or (accept? s)
+                            (some accept? (fsm-reachable-states fsm s)))))]
+    (set (filter dead-state? states))))
 
 ;; ## Replace/Remove States
 
@@ -183,14 +182,30 @@
       (when-not (or (= x s/accept!) (= x s/reject!))
         (keyword (str prefix (name x)))))))
 
-(defn fsm-reindex
-  "Rename states to `state-x` where `state-0` is the initial state."
-  ([fsm] (fsm-reindex fsm #(= % #{s/reject!}) #(= % #{s/accept!})))
-  ([{:keys[accept states transitions initial] :as fsm} reject-state? accept-state?]
-   (let [state-map (zipmap 
-                     (filter (comp not reject-state?) (fsm-reachable-state-seq fsm initial))
-                     (for [i (range)] (keyword (str "state-" i))))]
-     (fsm-rename-states fsm (fn [s]
-                              (cond (reject-state? s) s/reject!
-                                    (accept-state? s) s/accept!
-                                    :else (state-map s)))))))
+(def fsm-reindex
+  "Reindex states using a given state-name/index-based rename function. It 
+   is also possible to specify predicates for which states to replace by the
+   default `reject!` or `accept!` states."
+  (letfn [(default-rename [state i]
+            (keyword (str "q" i)))
+          (default-reject? [s] 
+            (= s #{s/reject!}))
+          (default-accept? [s] 
+            (= s #{s/accept!}))]
+    (fn 
+      ([fsm] (fsm-reindex fsm default-rename))
+      ([fsm f] (fsm-reindex fsm f default-reject? default-accept?))
+      ([fsm r? a?] (fsm-reindex fsm default-rename r? a?))
+      ([{:keys[accept states transitions initial] :as fsm} f r? a?]       
+       (let [state-map (zipmap 
+                         (->>
+                           (fsm-reachable-state-seq fsm initial)
+                           (filter #(not (or (r? %) (a? %)))))
+                         (range))]
+         (fsm-rename-states 
+           fsm
+           (fn [s]
+             (cond (r? s) s/reject!
+                   (a? s) s/accept!
+                   :else (let [i (state-map s)]
+                           (f s i))))))))))
