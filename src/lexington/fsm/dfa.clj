@@ -90,7 +90,7 @@
          (fsm-reindex #(= % [s/reject! s/reject!])
                       #(= % [s/accept! s/accept!])))))))
 
-(def cartesian-intersect-dfa
+(def cartesian-intersection-dfa
   "Create (cartesian product) intersection of DFAs."
   (letfn [(intersect-acceptor? [x y a1 a2]
             (and (a1 x) (a2 y)))
@@ -120,10 +120,10 @@
         fsm1
         fsms))))
 
-(defn cartesian-diff-dfa
+(defn cartesian-difference-dfa
   "Create (cartesian product) difference of two DFAs."
   [fsm1 fsm2]
-  (cartesian-intersect-dfa fsm1 (invert-dfa fsm2)))
+  (cartesian-intersection-dfa fsm1 (invert-dfa fsm2)))
 
 ;; ## Combinations (using NFA)
 
