@@ -28,18 +28,22 @@
               (fn [table state]
                 (if-let [tt (transitions state)]
                   (if-not (tt t/any)
-                    (add-any-to-reject table state)
+                    (->
+                      (assoc table state tt)
+                      (add-any-to-reject state))
                     (assoc table state tt))
                   (add-any-to-reject table state)))
               {}
               states))]
-    (fn [{:keys[states transitions reject] :as fsm}]
-      (let [normalized-transitions (-> transitions
+    (fn [{:keys[states transitions accept reject] :as fsm}]
+      (let [normalized-states (conj (set states) s/reject!)
+            normalized-transitions (-> transitions
                                      (remove-reject-state-transitions (set reject))
-                                     (add-any-to-reject-transitions states))]
+                                     (add-any-to-reject-transitions normalized-states))]
         (-> fsm
-          (assoc :states (conj (set states) s/reject!))
+          (assoc :states normalized-states)
           (assoc :reject (conj (set reject) s/reject!))
+          (assoc :accept (disj (set accept) s/reject!))
           (assoc :transitions normalized-transitions))))))
 
 (defn fsm-next-states
