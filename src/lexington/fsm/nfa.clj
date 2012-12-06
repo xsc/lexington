@@ -141,14 +141,12 @@
 
 ;; ## NFA to DFA
 
-(defn nfa->dfa
-  "Convert NFA to DFA by creating 'set-states' and transitions between them."
-  [fsm]
-  (if-not (nfa? fsm)
+(defn multi-nfa->dfa
+  "Convert NFA to DFA using multiple initial states by creating 'set-states' and transitions between them."
+  [{:keys[accept transitions] :as fsm} initial-states]
+  (if (and (= (count initial-states) 1) (not (nfa? fsm)))
     fsm
-    (let [{:keys[accept initial transitions] :as nfa} (epsilon-nfa->nfa fsm)
-          new-initial #{initial}
-          accepting-state? #(some (set accept) %)]
+    (let [accepting-state? #(some (set accept) %)]
       (letfn [(next-state-set [current in]
                 (->> current
                   (mapcat 
@@ -160,21 +158,27 @@
               (get-transitions [s]
                 (let [inputs (mapcat (comp keys transitions) s)]
                   (reduce #(assoc %1 %2 (next-state-set s %2)) {} inputs)))]
-      (loop [states #{new-initial}
-             transitions (hash-map new-initial (transitions initial))
-             remaining-states [new-initial]]
-        (if-not (seq remaining-states)
-          (-> {}
-            (assoc :states states)
-            (assoc :initial new-initial)
-            (assoc :accept (set (filter accepting-state? states)))
-            (assoc :transitions transitions)
-            (fsm-reindex #(= #{s/reject!} %) #(= #{s/accept!} %)))
-          (let [next-transitions (map get-transitions remaining-states)
-                next-states (->>
-                              (mapcat vals next-transitions)
-                              (map (comp first vec))
-                              (filter (comp not states)))]
-            (recur (set (concat states next-states))
-                   (merge transitions (zipmap remaining-states next-transitions))
-                   next-states))))))))
+        (loop [states #{initial-states}
+               transitions (hash-map initial-states (get-transitions initial-states))
+               remaining-states [initial-states]]
+          (if-not (seq remaining-states)
+            (-> {}
+              (assoc :states states)
+              (assoc :initial initial-states)
+              (assoc :accept (set (filter accepting-state? states)))
+              (assoc :transitions transitions)
+              (fsm-reindex #(= #{s/reject!} %) #(= #{s/accept!} %)))
+            (let [next-transitions (map get-transitions remaining-states)
+                  next-states (->>
+                                (mapcat vals next-transitions)
+                                (map (comp first vec))
+                                (filter (comp not states)))]
+              (recur (set (concat states next-states))
+                     (merge transitions (zipmap remaining-states next-transitions))
+                     next-states))))))))
+
+(defn nfa->dfa
+  "Convert NFA (possibly epsilon-NFA) to DFA."
+  [fsm]
+  (let [{:keys[initial] :as nfa} (epsilon-nfa->nfa fsm)]
+    (multi-nfa->dfa nfa (hash-set initial))))
