@@ -4,36 +4,75 @@
   (:use [lexington.fsm.transitions :as t :only [any]]
         [lexington.fsm.states :as s :only [reject!]]))
 
-;; ## FSM Transition Analysis
+;; ## FSM Transitions
+
+(def fsm-normalize
+  "Normalize an FSM:
+   - remove all transitions from rejecting states (leave only to itself),
+   - add default rejecting state,
+   - add any-transitions to default rejecting state where no any is given,
+   - ...
+  "
+  (letfn [(remove-reject-state-transitions [transitions reject?]
+            (reduce
+              (fn [table [state m]]
+                (if (reject? state)
+                  (assoc-in table [state t/any] #{state})
+                  (assoc table state m)))
+              {}
+              transitions))
+          (add-any-to-reject [table state]
+            (assoc-in table [state t/any] #{s/reject!}))
+          (add-any-to-reject-transitions [transitions states]
+            (reduce
+              (fn [table state]
+                (if-let [tt (transitions state)]
+                  (if-not (tt t/any)
+                    (add-any-to-reject table state)
+                    (assoc table state tt))
+                  (add-any-to-reject table state)))
+              {}
+              states))]
+    (fn [{:keys[states transitions reject] :as fsm}]
+      (let [normalized-transitions (-> transitions
+                                     (remove-reject-state-transitions (set reject))
+                                     (add-any-to-reject-transitions states))]
+        (-> fsm
+          (assoc :states (conj (set states) s/reject!))
+          (assoc :reject (conj (set reject) s/reject!))
+          (assoc :transitions normalized-transitions))))))
 
 (defn fsm-next-states
   "Get set of states directly reachable from a given state."
-  [{:keys[states transitions]} src-state]
+  [{:keys[states transitions reject]} src-state]
   (set
-    (when-let [state-transitions (transitions src-state)]
-      (apply concat (vals state-transitions)))))
+    (when-not (contains? reject src-state)
+      (when-let [state-transitions (transitions src-state)]
+        (apply concat (vals state-transitions))))))
 
 (defn fsm-destination-states
   "Get set of states that are reached in the given FSM when receiving the
    given input in the given state."
-  [{:keys[states transitions]} src-state input]
+  [{:keys[states transitions reject]} src-state input]
   (set
-    (when-let [state-transitions (transitions src-state)]
-      (or (state-transitions input) (state-transitions t/any)))))
+    (when-not (contains? reject src-state)
+      (when-let [state-transitions (transitions src-state)]
+        (or (state-transitions input) (state-transitions t/any) #{s/reject!})))))
 
 (defn fsm-transition-inputs
   "Get set of inputs that will let the FSM transition from a given source to
    a given destination state."
-  [{:keys[states transitions]} src-state dest-state]
+  [{:keys[states transitions reject]} src-state dest-state]
   (set
-    (when-let [state-transitions (transitions src-state)]
-      (reduce
-        (fn [inputs [input s]]
-          (if (s dest-state)
-            (conj inputs input)
-            inputs))
-        #{}
-        state-transitions))))
+    (when-not (contains? reject src-state)
+      (when-let [state-transitions (transitions src-state)]
+        (reduce
+          (fn [inputs [input s]]
+            (if (s dest-state)
+              (conj inputs input)
+              inputs))
+          #{}
+          state-transitions)))))
 
 (defn fsm-alphabet
   "Get the (explicitly given) input alphabet of an FSM. This might differ from the actual
@@ -49,7 +88,7 @@
   "Get possibly infinite seq of state sets starting from a given root state. Each
    set contains all the states reachable from any of the previous set's states."
   ([fsm] (fsm-state-seq fsm (:initial fsm)))
-  ([fsm root]
+  ([{:keys[reject] :as fsm} root]
    (let [get-next-states (partial fsm-next-states fsm)]
      (letfn [(lazy-bfs [current-states]
                (lazy-seq
@@ -100,7 +139,7 @@
 
 (defn fsm-replace-states
   "Replace all states matching a given predicate." 
-  [{:keys[transitions initial] :as fsm}  p replace-fn]
+  [{:keys[transitions initial] :as fsm} p replace-fn]
   (letfn [(replace-state [x] (if (p x) (replace-fn x) x))
           (replace-set [x] (set (filter (comp not nil?) (map replace-state x))))
           (replace-sets [nfa & sets]
@@ -142,9 +181,11 @@
 
 (defn fsm-remove-dead-states
   "Remove dead states from FSM."
-  [fsm]
-  (fsm-remove-states fsm 
-                     (set (fsm-dead-states fsm))))
+  [{:keys[reject] :as fsm}]
+  (-> fsm
+    (assoc :reject (set (concat reject (fsm-dead-states fsm))))
+    fsm-normalize
+    (fsm-remove-unreachable-states)))
 
 ;; ## Rename States
 
@@ -173,6 +214,15 @@
         (rename-sets :accept :reject :states)
         (assoc :initial (rename initial))
         (assoc :transitions new-transitions)))))
+
+(defn fsm-rename-single-state
+  "Rename an FSM's state."
+  [fsm rename-what rename-to]
+  (fsm-rename-states
+    fsm
+    (fn [s]
+      (when (= s rename-what)
+        rename-to))))
 
 (defn fsm-prefix-states
   "Prefix all states of an FSM with a given string."
