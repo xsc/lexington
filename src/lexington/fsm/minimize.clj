@@ -1,12 +1,43 @@
-(ns ^{ :doc "Implementation of Hopcroft's Algorithm."
+(ns ^{ :doc "Implementation of Minimization Algorithms."
        :author "Yannick Scherer" }
   lexington.fsm.minimize
   (:use [clojure.set :as sets]
         [lexington.fsm.transitions :as t :only [any]]
         [lexington.fsm.states :as s :only [reject! accept!]]
-        [lexington.fsm.utils :only [fsm-reindex]]))
+        [lexington.fsm.nfa :only [nfa->dfa]]
+        [lexington.fsm.dfa :only [reverse-dfa]]
+        lexington.fsm.core
+        lexington.fsm.utils))
 
 ;; ## Minimization
+
+(defmulti minimize-dfa 
+  "Minimize the given DFA usign the specified `:algorithm`:
+   - `:brz`: Brzozowski Minimization (default)
+   - `:hopcroft`: Hopcroft Minimization
+  "
+  (fn [dfa & {:keys[algorithm]}] 
+    (prn algorithm)
+    algorithm)
+  :default :brz)
+
+;; ## Brzozowski Minimization
+;;
+;; 1. Reverse DFA to get an NFA with multiple initial states.
+;; 2. Convert NFA to DFA.
+;; 3. Reverse DFA again.
+;; 4. Convert NFA to DFA to get minimal result.
+;;
+;; __Note:__ `lexington.fsm.dfa/reverse-dfa` already creates a suitable DFA, so
+;; this function is nothing else than said reversal applied twice."
+
+(defmethod minimize-dfa :brz
+  [fsm & _]
+  (-> fsm
+    reverse-dfa
+    reverse-dfa))
+
+;; ## Hopcroft Minimization
 ;;
 ;; P := {F, Q \ F};
 ;; W := {F};
@@ -37,7 +68,7 @@
     (fn [dest]
       (map first
         (filter (fn [[from t]]
-                  (= (or (t input) (t t/any)) dest))
+                  (contains? (or (t input) (t t/any) #{s/reject!}) dest))
                 transitions)))
     dest-states))
 
@@ -85,45 +116,34 @@
       (let [n (rename-map from)]
         (if (m n)
           m
-          (assoc m n
-                 (reduce #(assoc %1 (first %2) 
-                                 (rename-map (second %2))) 
-                         {} tt)))))
+          (->>
+            (reduce
+              (fn [tt [e to]]
+                (assoc tt e (set (map rename-map to))))
+              {} tt)
+            (assoc m n)))))
     {}
     transitions))
 
-(defn- find-dead-states
-  "Get a set of all the dead states in the given FSM. A dead state only has
-   transitions to itself and is not explicitly accepting."
-  [{:keys[states accept reject transitions] :as fsm}]
-  (let [candidates (filter (comp not accept) states)]
-    (set
-      (filter (fn [s]
-                (let [dests (vals (transitions s))]
-                  (not (some (comp not (hash-set s s/reject!)) dests))))
-              candidates))))
-
-(defn minimize-dfa
-  "Minimize DFA using Hopcroft's Algorithm."
-  [{:keys[states accept reject initial transitions] :as fsm}]
-  (let [partitions (create-partitions fsm)
+(defmethod minimize-dfa :hopcroft
+  [fsm & _]
+  (let [{:keys[states accept initial transitions] :as fsm} (fsm-normalize (nfa->dfa fsm))
+        partitions (create-partitions fsm)
         partition-map (zipmap partitions
                               (for [i (range)] (keyword (str "s" i))))
-        rename-map (reduce
-                     (fn [m [p n]]
-                       (reduce #(assoc %1 %2 n) m p))
-                     {}
-                     partition-map)
+        rename-map (->
+                     (reduce
+                       (fn [m [p n]]
+                         (reduce #(assoc %1 %2 n) m p))
+                       {}
+                       partition-map)
+                     (assoc s/reject! s/reject!))
         new-transitions (rename-transitions rename-map transitions)
         minimized-fsm (-> {}
                         (assoc :states (set (map rename-map states)))
                         (assoc :accept (set (map rename-map accept)))
-                        (assoc :reject (set (map rename-map reject)))
                         (assoc :initial (rename-map initial))
-                        (assoc :transitions (rename-transitions rename-map transitions)))
-        dead-states (find-dead-states minimized-fsm)]
-    (fsm-reindex minimized-fsm
-                 (fn [s]
-                   (or (= s s/reject!)
-                       (dead-states s)))
-                 #(= % s/accept!))))
+                        (assoc :transitions (rename-transitions rename-map transitions)))]
+    (->
+      minimized-fsm
+      fsm-remove-dead-states)))
