@@ -106,10 +106,11 @@
   "Add accepting state to FSM."
   [fsm & state-list]
   (reduce 
-    (fn [{:keys[accept states] :as fsm} state]
+    (fn [{:keys[accept reject states] :as fsm} state]
       (if-not state
         fsm
         (-> fsm
+          (assoc :reject (disj (set reject) state))
           (assoc :accept (conj (set accept) state))
           (assoc :states (conj (set states) state)))))
     fsm
@@ -119,6 +120,19 @@
   "Let the FSM accept empty inputs."
   [{:keys[initial] :as fsm}]
   (accept-in fsm initial))
+
+(defn reject-in 
+  [fsm & state-list]
+  (reduce 
+    (fn [{:keys[accept reject states] :as fsm} state]
+      (if-not state
+        fsm
+        (-> fsm
+          (assoc :reject (conj (set reject) state))
+          (assoc :accept (disj (set accept) state))
+          (assoc :states (conj (set states) state)))))
+    fsm
+    state-list))
 
 (defn initial-state
   "Set initial state of FSM."
