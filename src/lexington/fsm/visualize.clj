@@ -64,55 +64,70 @@
 
 ;; ## GraphViz Generation Functions
 
+(defn- default-ignore-state?
+  [s]
+  (= s s/reject!))
+
 (defn fsm->dot
   "Convert FSM to GraphViz Dot format."
-  [fsm]
-  (let [{:keys[accept reject states transitions initial]} (fsm-remove-unreachable-states fsm)
-        init-node (keyword (gensym))]
-    (letfn [(generate-node [s]
-              (when-not (= s s/reject!)
-                (let [sn (node-name s)]
-                  (cond ((set accept) s) [sn ACCEPT_STYLE]
-                        ((set reject) s) [sn REJECT_STYLE]
-                        :else [sn]))))
-            (generate-edges [from to-map]
-              (let [ct (collect-transitions to-map)]
-                (->> ct
-                  (map 
-                    (fn [[to es]]
-                      (when-not (= to s/reject!)
-                        (let [label (->>
-                                      (map (fn [e]
-                                             (cond (= e t/any) "*"
-                                                   (= e epsi) "\u03f5"
-                                                   :else (str e))) es)
-                                      (string/join ","))]
-                          (vector
-                            (node-name from)
-                            (node-name to)
-                            { :label label })))))
-                  (filter (comp not nil?)))))]
-      (-> 
-        (graph
-          (concat
-            [(graph-attrs { :rankdir "LR" })
-             (node-attrs NODE_STYLE)
-             (edge-attrs EDGE_STYLE)
-             [init-node INIT_STYLE]]
-            (->> states
-              (map generate-node)
-              (filter (comp not nil?)))
-            [[init-node (node-name initial)]]
-            (mapcat (fn [[from to]]
-                      (generate-edges from to)) transitions)))
-        dot))))
+  ([fsm] (fsm->dot fsm default-ignore-state?))
+  ([fsm ignore-state?]
+   (let [{:keys[accept reject states transitions initial]} (-> fsm
+                                                             fsm-normalize
+                                                             fsm-remove-unreachable-states)
+         init-node (keyword (gensym))]
+     (letfn [(generate-node [s]
+               (when-not (ignore-state? s)
+                 (let [sn (node-name s)]
+                   (cond ((set accept) s) [sn ACCEPT_STYLE]
+                         ((set reject) s) [sn REJECT_STYLE]
+                         :else [sn]))))
+             (generate-edges [from to-map]
+               (when-not (ignore-state? from)
+                 (let [ct (collect-transitions to-map)]
+                   (->> ct
+                     (map 
+                       (fn [[to es]]
+                         (when-not (ignore-state? to)
+                           (let [label (->>
+                                         (map (fn [e]
+                                                (cond (= e t/any) "*"
+                                                      (= e epsi) "\u03f5"
+                                                      :else (str e))) es)
+                                         (string/join ","))]
+                             (vector
+                               (node-name from)
+                               (node-name to)
+                               { :label label })))))
+                     (filter (comp not nil?))))))]
+       (-> 
+         (graph
+           (concat
+             [(graph-attrs { :rankdir "LR" })
+              (node-attrs NODE_STYLE)
+              (edge-attrs EDGE_STYLE)
+              [init-node INIT_STYLE]]
+             (->> states
+               (map generate-node)
+               (filter (comp not nil?)))
+             [[init-node (node-name initial)]]
+             (mapcat (fn [[from to]]
+                       (generate-edges from to)) transitions)))
+         dot)))))
 
 ;; ## Presentation Functions
 
 (defn show-fsm!
   "Open Dorothy Window to display the FSM."
-  [fsm & options]
-  (apply show! (fsm->dot fsm) options))
+  ([fsm] (show-fsm! fsm default-ignore-state?))
+  ([fsm ignore?] (show! (fsm->dot fsm ignore?))))
+
+(defn show-fsm-all!
+  "Open Dorothy Window to display the FSM, not ignoring any states."
+  [fsms]
+  (let [fsms (if (vector? fsms) fsms (vector fsms))]
+    (doseq [fsm fsms]
+      (show-fsm! fsm (constantly nil)))))
 
 (defn save-fsm!
   "Save FSM to File using the given filename and format, e.g.:
