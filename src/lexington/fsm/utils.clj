@@ -4,7 +4,7 @@
   (:use [lexington.fsm.transitions :as t :only [any]]
         [lexington.fsm.states :as s :only [reject!]]))
 
-;; ## FSM Transitions
+;; ## FSM Normalization
 
 (def fsm-normalize
   "Normalize an FSM:
@@ -45,6 +45,8 @@
           (assoc :reject (conj (set reject) s/reject!))
           (assoc :accept (disj (set accept) s/reject!))
           (assoc :transitions normalized-transitions))))))
+
+;; ## FSM Transition Analysis
 
 (defn fsm-next-states
   "Get set of states directly reachable from a given state."
