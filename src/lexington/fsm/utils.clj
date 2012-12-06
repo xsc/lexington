@@ -180,7 +180,8 @@
                      (set (fsm-unreachable-states fsm))))
 
 (defn fsm-remove-dead-states
-  "Remove dead states from FSM."
+  "Remove dead states from FSM. Note that this will also remove unreachable
+   states from the FSM!"
   [{:keys[reject] :as fsm}]
   (-> fsm
     (assoc :reject (set (concat reject (fsm-dead-states fsm))))
