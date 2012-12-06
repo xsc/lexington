@@ -7,6 +7,11 @@ lexington is aimed at simplifying the creation of extensible and combinable lexe
 customizable infrastructure and (so far) some predefined helper utilities. Still a work in progress, I hope it provides
 at least a little bit of usefulness - and if not that, perhaps a light chuckle?
 
+__Include via Leiningen:__
+```clojure
+[lexington "0.1.1"]
+```
+
 ## Lexer
 A lexer is just a function consuming a sequence of input entities (e.g. characters) and producing a sequence of tokens 
 derived from that input. Tokens are simple Clojure maps with three mandatory fields:
