@@ -17,7 +17,6 @@
    - `:hopcroft`: Hopcroft Minimization
   "
   (fn [dfa & {:keys[algorithm]}] 
-    (prn algorithm)
     algorithm)
   :default :brz)
 
@@ -130,7 +129,7 @@
   (let [{:keys[states accept initial transitions] :as fsm} (fsm-normalize (nfa->dfa fsm))
         partitions (create-partitions fsm)
         partition-map (zipmap partitions
-                              (for [i (range)] (keyword (str "s" i))))
+                              (for [i (range)] (keyword (str "q" i))))
         rename-map (->
                      (reduce
                        (fn [m [p n]]
