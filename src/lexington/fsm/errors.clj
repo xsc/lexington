@@ -6,11 +6,29 @@
   "The currently generated/run FSM's name."
   nil)
 
+(def ^:dynamic *current-meta*
+  "Theerror source metadata. (:line)"
+  nil)
+
+(defmacro with-error-source
+  "Make error messages reference the FSM that is concerned."
+  [fsm-name & r]
+  `(binding [*current-fsm-name* ~fsm-name]
+     ~@r))
+
+(defmacro with-error-meta
+  "Make error messages reference the metadata that is connected with them."
+  [m & r]
+  `(binding [*current-meta* ~m]
+     ~@r))
+
 (defn error
   "Throw an exception with hints to what FSM it comes from."
   [& msg-parts]
-  (throw (Exception. (str "Error in FSM " 
-                          (or *current-fsm-name* "(anon)") ": " 
+  (throw (Exception. (str "FSM `" (or *current-fsm-name* "(anon)") "'"
+                          (when-let [{:keys[line]} *current-meta*]
+                            (str " [" *file* ", line " line "]"))
+                          ":\n"
                           (apply str msg-parts)))))
 
 (defn duplicate-state

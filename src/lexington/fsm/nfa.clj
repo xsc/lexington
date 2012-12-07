@@ -1,10 +1,9 @@
 (ns ^{ :doc "NFA Combination/Transformation" 
        :author "Yannick Scherer" }
   lexington.fsm.nfa
-  (:use [lexington.fsm.transitions :as t :only [any]]
-        [lexington.fsm.states :as s :only [reject! accept!]]
-        lexington.fsm.core
-        lexington.fsm.utils))
+  (:use lexington.fsm.core
+        lexington.fsm.utils
+        [lexington.fsm.consts :as c]))
 
 ;; ## Structure
 ;;
@@ -15,14 +14,20 @@
 (defn nfa-reject-state?
   "Is the default reject state?"
   [state-set]
-  (= #{s/reject!} state-set))
+  (= #{c/reject!} state-set))
 
 (defn nfa-accept-state?
   "Is the default accept state?"
   [state-set]
-  (= #{s/accept!} state-set))
+  (= #{c/accept!} state-set))
 
 ;; ## NFA Combination
+
+(defn- nfa-add-epsilon 
+  [nfa from to]
+  (-> nfa
+    (assoc :type :e-nfa)
+    (add-transition from c/epsi to)))
 
 (defn loop-nfa
   "Create looping NFA by adding epsilon transitions from each accepting state
@@ -91,7 +96,7 @@
     (if-not (seq next-states)
       visited
       (let [n (filter (comp not visited)
-                      (mapcat #(get-in transitions [% epsi]) next-states))]
+                      (mapcat #(get-in transitions [% c/epsi]) next-states))]
         (recur (set (concat n visited)) n)))))
 
 (defn epsilon-closure-transitions
@@ -99,7 +104,7 @@
   [transitions alphabet closure-state-map]
   (reduce 
     (fn [tt input]
-      (if (= epsi input)
+      (if (= c/epsi input)
         tt
         (reduce
           (fn [tt s]
@@ -107,7 +112,7 @@
                   dst-states (set (mapcat (comp #(map closure-state-map %) 
                                                 (fn [s]
                                                   (if-let [ts (transitions s)]
-                                                    (or (ts input) (ts t/any))
+                                                    (or (ts input) (ts c/any))
                                                     #{})))
                                           src-state))]
               (if-not (empty? dst-states)
@@ -121,7 +126,7 @@
 (defn epsilon-nfa->nfa
   "Resolve Epsilon Transitions by merging the epsilon targets with the epsilon source."
   [{:keys[transitions initial states accept] :as nfa}]
-  (if-not (epsilon-nfa? nfa)
+  (if (nfa? nfa)
     nfa
     (let [alphabet (mapcat keys (vals transitions))
           closure-state-map (into {} 
@@ -131,6 +136,7 @@
           closure-accept (set (filter (partial some (set accept)) closure-states))
           closure-trans (epsilon-closure-transitions transitions alphabet closure-state-map)]
       (-> {}
+        (assoc :type :nfa)
         (assoc :states closure-states)
         (assoc :accept closure-accept)
         (assoc :initial (closure-state-map initial))
@@ -144,7 +150,7 @@
 (defn multi-nfa->dfa
   "Convert NFA to DFA using multiple initial states by creating 'set-states' and transitions between them."
   [{:keys[accept transitions] :as fsm} initial-states]
-  (if (and (= (count initial-states) 1) (not (nfa? fsm)))
+  (if (and (= (count initial-states) 1) (dfa? fsm))
     fsm
     (let [accepting-state? #(some (set accept) %)]
       (letfn [(next-state-set [current in]
@@ -152,7 +158,7 @@
                   (mapcat 
                     (fn [s]
                       (when-let [tt (transitions s)]
-                        (or (tt in) (tt t/any)))))
+                        (or (tt in) (tt c/any)))))
                   set
                   hash-set))
               (get-transitions [s]
@@ -163,11 +169,12 @@
                remaining-states [initial-states]]
           (if-not (seq remaining-states)
             (-> {}
+              (assoc :type :dfa)
               (assoc :states states)
               (assoc :initial initial-states)
               (assoc :accept (set (filter accepting-state? states)))
               (assoc :transitions transitions)
-              (fsm-reindex #(= #{s/reject!} %) #(= #{s/accept!} %)))
+              (fsm-reindex #(= #{c/reject!} %) #(= #{c/accept!} %)))
             (let [next-transitions (map get-transitions remaining-states)
                   next-states (->>
                                 (mapcat vals next-transitions)

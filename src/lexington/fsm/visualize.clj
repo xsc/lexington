@@ -3,9 +3,7 @@
   lexington.fsm.visualize
   (:use dorothy.core
         [clojure.string :as string :only [join]]
-        [lexington.fsm.transitions :as t]
-        [lexington.fsm.states :as s]
-        [lexington.fsm.core :only [epsi]]
+        [lexington.fsm.consts :as c]
         lexington.fsm.utils))
 
 ;; ## Helpers
@@ -66,7 +64,7 @@
 
 (defn- default-ignore-state?
   [s]
-  (= s s/reject!))
+  (= s c/reject!))
 
 (defn fsm->dot
   "Convert FSM to GraphViz Dot format."
@@ -91,8 +89,8 @@
                          (when-not (ignore-state? to)
                            (let [label (->>
                                          (map (fn [e]
-                                                (cond (= e t/any) "*"
-                                                      (= e epsi) "\u03f5"
+                                                (cond (= e c/any) "*"
+                                                      (= e c/epsi) "\u03f5"
                                                       :else (str e))) es)
                                          (string/join ","))]
                              (vector

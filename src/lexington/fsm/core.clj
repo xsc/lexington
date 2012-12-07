@@ -1,10 +1,10 @@
 (ns ^{ :doc "Lexington FSM Representation"
        :author "Yannick Scherer" }
   lexington.fsm.core
-  (:require [lexington.fsm.states :as s :only [reject! accept!]]
-            [lexington.fsm.transitions :as t :only [any]]
-            [lexington.fsm.errors :as e])
-  (:use lexington.fsm.utils))
+  (:require [lexington.fsm.consts :as c]) 
+  (:use [lexington.fsm.errors :as e]
+        lexington.fsm.utils))
+
 
 ;; ## FSM Structure
 ;;
@@ -22,7 +22,6 @@
 ;; more than one element it's `:nfa`; otherwise the FSM is a `:dfa`. All lexington operations will 
 ;; adjust the type of the FSM when needed.
 
-(def ^:const epsi "The epsilon input." ::epsilon)
 
 ;; ### Validation of FSM Types
 
@@ -38,7 +37,7 @@
 
 (defmethod validate-fsm-type :nfa
   [fsm]
-  (not (some #(= % epsi) (fsm-alphabet fsm))))
+  (not (some #(= % c/epsi) (fsm-alphabet fsm))))
 
 (defmethod validate-fsm-type :dfa
   [{:keys[transitions]}]
@@ -83,24 +82,30 @@
 
 (defmethod add-fsm-transition :nfa
   [fsm from input to]
-  (when-not (= input epsi)
+  (when-not (= input c/epsi)
     (add-nfa-transition fsm from input to)))
 
 (defmethod add-fsm-transition :dfa
   [{:keys[transitions] :as fsm} from input to]
-  (assoc-in fsm [:transitions from input] (hash-set to)))
+  (when (empty? (set (get-in transitions [from input])))
+    (when-not (= input c/epsi)
+      (assoc-in fsm [:transitions from input] (hash-set to)))))
 
 ;; ### FSM Creation
 
 (defn add-transition
   "Add transition (and its states) to FSM."
-  [{:keys[states initial] :as fsm} from input to]
-  (let [fsm* (add-fsm-transition fsm from input to)]
-    (if fsm*
-      (-> fsm*
-        (assoc :states (conj (conj (set states) from) to))
-        (assoc :initial (or initial from)))
-      fsm)))
+  [{:keys[type states initial] :as fsm} from input to]
+  (if-let [fsm* (add-fsm-transition fsm from input to)]
+    (-> fsm*
+      (assoc :states (conj (conj (set states) from) to))
+      (assoc :initial (or initial from)))
+    (e/error
+      (str 
+        (format "  Transition [%s -> %s] in state `%s' not allowed.\n" input to from)
+        (format "  FSM is of type `%s'. " type)
+        (when-let [t (get-in fsm [:transitions from])]
+          (format "Current transitions in `%s': %s" from t))))))
 
 (defn add-transition-set
   "Add transition to a set of states to FSM."
@@ -222,7 +227,7 @@
             (assoc :reject (conj (set reject) state))
             (assoc :accept (disj (set accept) state))
             (assoc :states (conj (set states) state))
-            (assoc-in [:transitions state] { t/any #{state} }))))
+            (assoc-in [:transitions state] { c/any #{state} }))))
       fsm
       state-list)
     (assoc :initial (or initial (first state-list)))))
@@ -304,7 +309,7 @@
   [& inputs]
   (except inputs))
 
-(def ^:const eps [:epsilon])
+(def ^:const eps c/epsi)
 
 ;; ### Target State Shorthands
 
@@ -323,17 +328,9 @@
   (target->set [t]
     #{}))
 
-(def reject! 
-  "Get Reject State."
-  (constantly s/reject!))
-
-(def accept! 
-  "Get Accept State."
-  (constantly s/accept!))
-
 ;; ### Generator
 
-(defn- generate-fsm-transitions
+(defn generate-fsm-transitions
   "Generate FSM Transitions from a seq of [input target] pairs where `input`
    is a vector (consisting of `:one-of`, `:except`, `:literal`, `:epsilon`,  
    `:any` and others, as well as additional data when needed) and `target` is a 
@@ -346,11 +343,11 @@
   [fsm src-state pairs]
   (loop [fsm fsm
          handled-inputs #{}
-         any-inputs #{t/any}
+         any-inputs #{c/any}
          pairs pairs]
     (if-not (seq pairs)
       (reduce 
-        #(add-transition %1 src-state %2 s/reject!)
+        #(add-transition %1 src-state %2 c/reject!)
         fsm
         any-inputs)
       (let [[[input target] & rst] pairs
@@ -366,8 +363,8 @@
                           (set (concat data handled-inputs))
                           any-inputs 
                           rst)
-          :epsilon (recur (add-tr fsm epsi) 
-                          (conj any-inputs epsi)
+          :epsilon (recur (add-tr fsm c/epsi) 
+                          (conj any-inputs c/epsi)
                           any-inputs 
                           rst)
           :except (let [inputs-to-handle (filter 
@@ -475,7 +472,7 @@
             (and (symbol? x) (= (name x) "->")))
           (resolve-input [i]
             (if (is-underscore? i) 
-              `[:literal t/any]
+              `[:literal c/any]
               i))
           (resolve-destination [d]
             (cond (is-underscore? d) `(hash-set ~state)
@@ -507,29 +504,38 @@
 (defmacro epsilon-nfa
   "Create new e-NFA using the given directives."
   [& directives]
-  `(fsm* (epsilon-nfa*) ~@directives))
+  `(e/with-error-meta ~(meta &form)
+     (fsm* (epsilon-nfa*) ~@directives)))
 
 (defmacro nfa
   "Create new NFA using the given directives."
   [& directives]
-  `(fsm* (nfa*) ~@directives))
+  `(e/with-error-meta ~(meta &form)
+     (fsm* (nfa*) ~@directives)))
 
 (defmacro dfa
   "Create new DFA using the given directives."
   [& directives]
-  `(fsm* (dfa*) ~@directives))
+  `(e/with-error-meta ~(meta &form)
+     (fsm* (dfa*) ~@directives)))
 
 (defmacro def-epsilon-nfa
   "Define new e-NFA."
   [id & directives]
-  `(def ~id (epsilon-nfa ~@directives)))
+  `(e/with-error-source ~(str id)
+     (e/with-error-meta ~(meta &form)
+       (def ~id (fsm* (epsilon-nfa*) ~@directives)))))
 
 (defmacro def-nfa
   "Define new NFA."
   [id & directives]
-  `(def ~id (nfa ~@directives)))
+  `(e/with-error-source ~(str id)
+     (e/with-error-meta ~(meta &form)
+       (def ~id (fsm* (nfa*) ~@directives)))))
 
 (defmacro def-dfa
   "Define new DFA."
   [id & directives]
-  `(def ~id (dfa ~@directives)))
+  `(e/with-error-source ~(str id)
+     (e/with-error-meta ~(meta &form)
+       (def ~id (fsm* (dfa*) ~@directives)))))
