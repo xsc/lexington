@@ -2,8 +2,7 @@
        :author "Yannick Scherer" }
   lexington.fsm.minimize
   (:use [clojure.set :as sets]
-        [lexington.fsm.transitions :as t :only [any]]
-        [lexington.fsm.states :as s :only [reject! accept!]]
+        [lexington.fsm.consts :as c]
         [lexington.fsm.nfa :only [nfa->dfa]]
         [lexington.fsm.dfa :only [reverse-dfa]]
         lexington.fsm.core
@@ -17,7 +16,6 @@
    - `:hopcroft`: Hopcroft Minimization
   "
   (fn [dfa & {:keys[algorithm]}] 
-    (prn algorithm)
     algorithm)
   :default :brz)
 
@@ -68,7 +66,7 @@
     (fn [dest]
       (map first
         (filter (fn [[from t]]
-                  (contains? (or (t input) (t t/any) #{s/reject!}) dest))
+                  (contains? (or (t input) (t c/any) #{c/reject!}) dest))
                 transitions)))
     dest-states))
 
@@ -130,14 +128,14 @@
   (let [{:keys[states accept initial transitions] :as fsm} (fsm-normalize (nfa->dfa fsm))
         partitions (create-partitions fsm)
         partition-map (zipmap partitions
-                              (for [i (range)] (keyword (str "s" i))))
+                              (for [i (range)] (keyword (str "q" i))))
         rename-map (->
                      (reduce
                        (fn [m [p n]]
                          (reduce #(assoc %1 %2 n) m p))
                        {}
                        partition-map)
-                     (assoc s/reject! s/reject!))
+                     (assoc c/reject! c/reject!))
         new-transitions (rename-transitions rename-map transitions)
         minimized-fsm (-> {}
                         (assoc :states (set (map rename-map states)))

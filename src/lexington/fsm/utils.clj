@@ -1,8 +1,7 @@
 (ns ^{ :doc "FSM Manipulation and Analysis Utilities"
        :author "Yannick Scherer" }
   lexington.fsm.utils
-  (:use [lexington.fsm.transitions :as t :only [any]]
-        [lexington.fsm.states :as s :only [reject!]]))
+  (:use [lexington.fsm.consts :as c]))
 
 ;; ## FSM Normalization
 
@@ -17,17 +16,17 @@
             (reduce
               (fn [table [state m]]
                 (if (reject? state)
-                  (assoc-in table [state t/any] #{state})
+                  (assoc-in table [state c/any] #{state})
                   (assoc table state m)))
               {}
               transitions))
           (add-any-to-reject [table state]
-            (assoc-in table [state t/any] #{s/reject!}))
+            (assoc-in table [state c/any] #{c/reject!}))
           (add-any-to-reject-transitions [transitions states]
             (reduce
               (fn [table state]
                 (if-let [tt (transitions state)]
-                  (if-not (tt t/any)
+                  (if-not (tt c/any)
                     (->
                       (assoc table state tt)
                       (add-any-to-reject state))
@@ -36,14 +35,14 @@
               {}
               states))]
     (fn [{:keys[states transitions accept reject] :as fsm}]
-      (let [normalized-states (conj (set states) s/reject!)
+      (let [normalized-states (conj (set states) c/reject!)
             normalized-transitions (-> transitions
                                      (remove-reject-state-transitions (set reject))
                                      (add-any-to-reject-transitions normalized-states))]
         (-> fsm
           (assoc :states normalized-states)
-          (assoc :reject (conj (set reject) s/reject!))
-          (assoc :accept (disj (set accept) s/reject!))
+          (assoc :reject (conj (set reject) c/reject!))
+          (assoc :accept (disj (set accept) c/reject!))
           (assoc :transitions normalized-transitions))))))
 
 ;; ## FSM Transition Analysis
@@ -63,7 +62,7 @@
   (set
     (when-not (contains? reject src-state)
       (when-let [state-transitions (transitions src-state)]
-        (or (state-transitions input) (state-transitions t/any) #{s/reject!})))))
+        (or (state-transitions input) (state-transitions c/any) #{c/reject!})))))
 
 (defn fsm-transition-inputs
   "Get set of inputs that will let the FSM transition from a given source to
@@ -85,7 +84,7 @@
    alphabet, since FSMs can contain `any` transitions."
   [{:keys[transitions]}]
   (set
-    (filter (comp not #(= % t/any))
+    (filter (comp not #(= % c/any))
             (mapcat keys (vals transitions)))))
 
 ;; ## Reachable/Unreachable/Dead States
@@ -236,7 +235,7 @@
   [fsm prefix]
   (fsm-rename-states fsm
     (fn [x]
-      (when-not (or (= x s/accept!) (= x s/reject!))
+      (when-not (or (= x c/accept!) (= x c/reject!))
         (keyword (str prefix (name x)))))))
 
 (def fsm-reindex
@@ -246,9 +245,9 @@
   (letfn [(default-rename [state i]
             (keyword (str "q" i)))
           (default-reject? [s] 
-            (= s #{s/reject!}))
+            (= s #{c/reject!}))
           (default-accept? [s] 
-            (= s #{s/accept!}))]
+            (= s #{c/accept!}))]
     (fn 
       ([fsm] (fsm-reindex fsm default-rename))
       ([fsm f] (fsm-reindex fsm f default-reject? default-accept?))
@@ -262,7 +261,7 @@
          (fsm-rename-states 
            fsm
            (fn [s]
-             (cond (r? s) s/reject!
-                   (a? s) s/accept!
+             (cond (r? s) c/reject!
+                   (a? s) c/accept!
                    :else (let [i (state-map s)]
                            (f s i))))))))))

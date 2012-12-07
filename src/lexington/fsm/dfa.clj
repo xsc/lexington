@@ -2,8 +2,7 @@
        :author "Yannick Scherer" }
   lexington.fsm.dfa
   (:use [lexington.fsm.nfa :as n]
-        [lexington.fsm.states :as s :only [accept! reject!]]
-        [lexington.fsm.transitions :as t :only [any]]
+        [lexington.fsm.consts :as c]
         [lexington.fsm.errors :as e]
         lexington.fsm.core
         lexington.fsm.utils))
@@ -14,11 +13,11 @@
 
 (defn dfa-reject-state?
   [s]
-  (= s #{s/reject!}))
+  (= s #{c/reject!}))
 
 (defn dfa-accept-state?
   [s]
-  (= s #{s/accept!}))
+  (= s #{c/accept!}))
 
 ;; ## Simple Transformations
 
@@ -37,11 +36,11 @@
   [{:keys[accept states] :as dfa}]
   (-> dfa
     prepare-fsm
-    (fsm-rename-single-state s/reject! s/accept!)
+    (fsm-rename-single-state c/reject! c/accept!)
     (assoc :reject #{})
     (assoc :accept (->> states
                      (filter (comp not (set accept)))
-                     (cons s/accept!)
+                     (cons c/accept!)
                      set))))
 
 (defn reverse-dfa
@@ -79,8 +78,8 @@
             in (set (concat (keys tx) (keys ty)))]
         (->>
           (for [e in] 
-            (let [txe (or (tx e) (tx t/any) #{s/reject!})
-                  tye (or (ty e) (ty t/any) #{s/reject!})]
+            (let [txe (or (tx e) (tx c/any) #{c/reject!})
+                  tye (or (ty e) (ty c/any) #{c/reject!})]
               (vector e (hash-set [(first txe) (first tye)]))))
           (into {})
           (vector [x y]))))))
@@ -109,8 +108,8 @@
          (assoc :initial initial)
          (assoc :transitions transitions)
          fsm-remove-unreachable-states
-         (fsm-reindex #(= % [s/reject! s/reject!])
-                      #(= % [s/accept! s/accept!])))))))
+         (fsm-reindex #(= % [c/reject! c/reject!])
+                      #(= % [c/accept! c/accept!])))))))
 
 (def cartesian-intersection-dfa
   "Create (cartesian product) intersection of DFAs."
