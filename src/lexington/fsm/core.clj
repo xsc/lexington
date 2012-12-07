@@ -330,7 +330,7 @@
 
 ;; ### Generator
 
-(defn generate-fsm-transitions
+(defn- generate-fsm-transitions
   "Generate FSM Transitions from a seq of [input target] pairs where `input`
    is a vector (consisting of `:one-of`, `:except`, `:literal`, `:epsilon`,  
    `:any` and others, as well as additional data when needed) and `target` is a 
