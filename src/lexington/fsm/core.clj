@@ -331,13 +331,13 @@
 ;; ### Generator
 
 (defn- generate-fsm-transitions
-  "Generate FSM Transitions from a seq of [input target] pairs where `input`
+  "Generate FSM transitions from a seq of [input target] pairs where `input`
    is a vector (consisting of `:one-of`, `:except`, `:literal`, `:epsilon`,  
    `:any` and others, as well as additional data when needed) and `target` is a 
    set of destination states.
   
-   Transitions are processed in order which only has significance for `:any`
-   (all remaining transitions will be ignored), as well as `:except` transition
+   Transitions are processed in the given order, which only has significance for 
+   `:any` (all remaining transitions will be ignored), as well as `:except` transition
    which cannot override or extend previously set targets.
    "
   [fsm src-state pairs]
@@ -392,7 +392,7 @@
 (defn- generate-state
   "Generate new state in FSM based on a state name and a list of transition pairs to
    be eventually processed by `generate-fsm-transitions`. If there is already a state
-   with the given name, it will possibly be overwritten."
+   with the given name, it might be overwritten."
   [{:keys[states] :as fsm} state pairs]
   (let [pairs (normalize-fsm-transitions pairs)]
     (generate-fsm-transitions fsm state pairs)))
@@ -441,7 +441,7 @@
     fsm
     directives))
 
-(defmulti ^:private form->directive
+(defmulti form->directive
   "Convert a form like
 
      (:state :s 0 -> :q)
@@ -457,7 +457,7 @@
   :default :state)
 
 (defn- normalize-transitions
-  "Convert 'fancy' transitions to a normalize vector, e.g.
+  "Convert 'fancy' transitions to a normalized vector, e.g.
 
     (normalize-transitions :x [0 -> :a 1 -> :b])
 
