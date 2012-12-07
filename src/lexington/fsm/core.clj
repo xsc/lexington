@@ -1,104 +1,191 @@
 (ns ^{ :doc "Lexington FSM Representation"
        :author "Yannick Scherer" }
   lexington.fsm.core
-  (:require [lexington.fsm.states :as s]
-            [lexington.fsm.transitions :as t]
-            [lexington.fsm.errors :as e]
-            lexington.fsm.utils))
+  (:require [lexington.fsm.states :as s :only [reject! accept!]]
+            [lexington.fsm.transitions :as t :only [any]]
+            [lexington.fsm.errors :as e])
+  (:use lexington.fsm.utils))
 
 ;; ## FSM Structure
 ;;
 ;; A FSM is represented as a map with the following keys:
+;;
 ;; - `:states`      : a set of all the states available
 ;; - `:initial`     : the starting state
 ;; - `:accept`      : a set of all states that let the FSM accept the input (if applicable)
+;; - `:reject`      : a set of all states that abort recognition immediately
 ;; - `:transitions` : a nested hash map `{ :current-state { <input> #{<next-states>} } }`
-;; Whether the FSM is a DFA or an NFA depends only on the contents of the target state sets:
-;; if there is any set that contains more than one state, it's an NFA; DFA otherwise.
+;; - `:type`        : the FSM type (`:e-nfa`, `:nfa`, `:dfa`)
+;;
+;; The FSM type can be determined by examining the FSM alphabet and target state sets: if the
+;; alphabet contains `lexington.fsm.core/epsi` it's `:e-nfa`; if there is one target state set with
+;; more than one element it's `:nfa`; otherwise the FSM is a `:dfa`. All lexington operations will 
+;; adjust the type of the FSM when needed.
 
-;; ### NFA
+(def ^:const epsi "The epsilon input." ::epsilon)
 
-(def ^:const epsi ::epsilon)
+;; ### Validation of FSM Types
 
-(defn nfa-add
-  "Add Transition to NFA."
-  [{:keys[transitions states initial] :as nfa} from input to]
-  (let [current-transitions (or (get-in transitions [from input]) #{})
-        to-set (if (set? to) to (hash-set to))]
-    (-> nfa
-      (assoc-in [:transitions from input]
-                (if (set? current-transitions)
-                  (set (concat to-set current-transitions))
-                  (conj to-set current-transitions)))
-      (assoc :states (set (concat to-set (conj (set states) from))))
-      (assoc :initial (or initial from)))))
+(defmulti validate-fsm-type
+  "Check if an FSM has the format its type requires."
+  (fn [{:keys[type]}]
+    type)
+  :default :e-nfa)
 
-(defn nfa-add-epsilon
-  "Add Epsilon Transition to NFA."
-  [nfa from to]
-  (nfa-add nfa from epsi to))
+(defmethod validate-fsm-type :e-nfa
+  [{:keys[transitions]}]
+  true)
 
-(defn nfa*
-  "Create NFA from a list of transition vectors. A transition vector
-   consists of the source state and a list of input/next-state pairs."
-  [& transitions]
+(defmethod validate-fsm-type :nfa
+  [fsm]
+  (not (some #(= % epsi) (fsm-alphabet fsm))))
+
+(defmethod validate-fsm-type :dfa
+  [{:keys[transitions]}]
+  (->>
+    (vals transitions)
+    (mapcat vals)
+    (map count)
+    (some #(> % 1))
+    not))
+
+(defn fsm-type
+  "Derive FSM type from structure of FSM."
+  [fsm]
+  (letfn [(is-fsm? [t]
+            (when (-> fsm
+                    (assoc :type t)
+                    validate-fsm-type)
+              t))]
+    (or 
+      (is-fsm? :dfa)
+      (is-fsm? :nfa)
+      (is-fsm? :e-nfa))))
+
+;; ### Add Transition
+
+(defmulti add-fsm-transition
+  "Add Transition to FSM based on FSM type."
+  (fn [{:keys[type]} from input to]
+    type))
+
+(defn- add-nfa-transition
+  "Add transition to NFA by merging target state sets."
+  [{:keys[transitions] :as fsm} from input to]
+  (let [tt (get-in transitions [from input])]
+    (assoc-in fsm 
+              [:transitions from input]
+              (conj (set tt) to))))
+
+(defmethod add-fsm-transition :e-nfa
+  [fsm from input to]
+  (add-nfa-transition fsm from input to))
+
+(defmethod add-fsm-transition :nfa
+  [fsm from input to]
+  (when-not (= input epsi)
+    (add-nfa-transition fsm from input to)))
+
+(defmethod add-fsm-transition :dfa
+  [{:keys[transitions] :as fsm} from input to]
+  (assoc-in fsm [:transitions from input] (hash-set to)))
+
+;; ### FSM Creation
+
+(defn add-transition
+  "Add transition (and its states) to FSM."
+  [{:keys[states initial] :as fsm} from input to]
+  (let [fsm* (add-fsm-transition fsm from input to)]
+    (if fsm*
+      (-> fsm*
+        (assoc :states (conj (conj (set states) from) to))
+        (assoc :initial (or initial from)))
+      fsm)))
+
+(defn add-transition-set
+  "Add transition to a set of states to FSM."
+  [fsm from input to-set]
   (reduce
-    (fn [nfa [src-state & trv]]
-      (let [pairs (partition 2 trv)]
-        (reduce 
-          (fn [nfa [input dst-state]]
-            (nfa-add nfa src-state input dst-state))
-          nfa
-          pairs)))
-    {}
+    (fn [fsm to]
+      (add-transition fsm from input to))
+    fsm
+    to-set))
+
+(defn add-transitions
+  "Add multiple transitions with a common source state, e.g.:
+
+    (add-transitions fsm 
+      [[:a 0 :a 1 :b 2 :c]
+       [:b 1 :b 2 :c]
+       [:c 2 :c]])
+
+   This is the same as:
+
+    (-> fsm
+      (add-transition :a 0 :a)
+      (add-transition :a 1 :b)
+      (add-transition :a 2 :c)
+      (add-transition :b 1 :b)
+      (add-transition :b 2 :c)
+      (add-transition :c 2 :c))
+  "
+  [fsm transitions]
+  (reduce 
+    (fn [fsm [from & targets]]
+      (reduce
+        (fn [fsm [input to]]
+          (add-transition fsm from input to))
+        fsm
+        (partition 2 targets)))
+    fsm
     transitions))
 
-;; ### DFA
+(defn fsm-creator
+  "Will create a function that generates FSMs based on a list of transitions
+   to be passed to `add-transitions`. Lists are given inline:
+  
+    (def x (fsm-creator :x))
+    ...
+    (x [:a 0 :a 1 :b]
+       [:b 1 :b])
+  "
+  [type]
+  (let [initial-fsm (-> {}
+                      (assoc :type type)
+                      (assoc :accept #{})
+                      (assoc :reject #{})
+                      (assoc :states #{})
+                      (assoc :initial nil)
+                      (assoc :transitions {}))]
+  (fn [& transitions]
+    (add-transitions initial-fsm transitions))))
 
-(defn dfa-add
-  "Add DFA transition. This will replace any existing transition for the
-   given state and input."
-  [{:keys[transitions states initial] :as dfa} from input to]
-  (let [current-transitions (get-in transitions [from input])]
-    (-> dfa
-      (assoc-in [:transitions from input] (hash-set to))
-      (assoc :states (conj (conj (set states) to) from))
-      (assoc :initial (or initial from)))))
+;; ### e-NFA/NFA/DFA
 
-(defn dfa*
-  "Create DFA from a list of transition vectors. A transition vector
-   consists of the source state and a list of input/next-state pairs."
-  [& transitions]
-  (reduce
-    (fn [dfa [src-state & trv]]
-      (let [pairs (partition 2 trv)]
-        (reduce 
-          (fn [dfa [input dst-state]]
-            (dfa-add dfa src-state input dst-state))
-          dfa
-          pairs)))
-    {}
-    transitions))
-
-;; ### Check Type of FSM
+(def epsilon-nfa*
+  "Create new epsilon-NFA."
+  (fsm-creator :e-nfa))
 
 (defn epsilon-nfa?
-  "Check if a given FSM is an epsilon-NFA."
-  [{:keys[transitions]}]
-  (some #(= % epsi)
-        (mapcat keys (vals transitions))))
+  [{:keys[type]}]
+  (= type :e-nfa))
 
-(defn nfa?
-  "Check if a given FSM is an NFA."
-  [{:keys[transitions] :as fsm}]
-  (or (epsilon-nfa? fsm)
-      (some (comp seq rest) 
-            (mapcat vals (vals transitions)))))
+(def nfa*
+  "Create new non-epsilon NFA."
+  (fsm-creator :nfa))
+
+(def nfa?
+  "Is the FSM a non-epsilon-NFA?
+   Note that DFAs are NFAs to."
+  (comp not epsilon-nfa?))
+
+(def dfa*
+  "Create new DFA."
+  (fsm-creator :dfa))
 
 (defn dfa?
-  "Check if a given FSM is a DFA."
-  [fsm]
-  (not (nfa? fsm)))
+  [{:keys[type]}]
+  (= type :dfa))
 
 ;; ### Common Operations
 
@@ -150,118 +237,299 @@
       (assoc :states (conj (set states) state)))))
 
 ;; ## Transition DSL
+;; 
+;; Transitions are given as `<input> -> <state(s)>` pairs, where inputs are two-element
+;; vectors whose first elements have the following semantics:
+;;
+;; - `:one-of` : value is a seq of further input vectors; match if one matches
+;; - `:except` : value is a seq of further input vectors; match if none matches
+;; - `:literal`: value is anything; match if values are equal
+;; - `:epsilon`: match epsilon
+;; - `:any`    : match anything
+;;
+;; Target states are given as a set. 
 
-(defn nfa-combine 
-  "Transition combination function for NFAs."
-  [a b]
-  (let [a-set (if (set? a) a (hash-set a))
-        b-set (if (set? b) b (hash-set b))]
-    (set (concat a-set b-set))))
+;; ### Input Shorthands
+;;
+;; It is of course possible to have shorthands to be converted into suitable vectors:
+;;
+;; - `#{...}` will be converted to `[:one-of #{...}]`
+;; - every non-vector will be converted to `[:literal x]`
 
-(defn dfa-combine 
-  "Transition combination function for DFAs."
-  [a b] 
-  a)
+(defprotocol ^:private TransitionInput
+  (input->vector [i]
+    "Convert input entity to vector usable by transition
+     map generator."))
+                 
+(extend-protocol TransitionInput
+  clojure.lang.IPersistentSet
+  (input->vector [i]
+    (vector :one-of i))
+  clojure.lang.IPersistentVector
+  (input->vector [i] 
+    i)
+  clojure.lang.ISeq
+  (input->vector [i]
+    (vector :one-of i))
+  java.lang.Object
+  (input->vector [i]
+    (vector :literal i))
+  nil
+  (input->vector [i]
+    (vector :literal i)))
 
-(defmacro state*
-  "The `state*` macro can be used for state generation. It introduces shorthands for the 
-different special transitions and target states:
+(defn except
+  "Create transition input that matches only if the entity is not
+   in the given sequence."
+  [inputs]
+  (vector :except 
+          (set inputs)))
 
-- `(:not ...)` represents the `(except ...)` transition
-- `(:or ...)` represents the `(one-of ...)` transition
-- `:accept!` represents the `accept!` destination state
-- `:reject!` represents the `reject!` destination state
-- `_` represents the `any` transition or the `continue!` destination state
-Additionally, the input entity and the next state are now separated by an arrow `->`. Example:
-    
-    (state* :dfa :state-a
-      (:not 'a 'b 'c) -> :state-a
-      (:or 'b 'c)     -> :accept!
-      _               -> :state-f)
+(defn except*
+  "Create transition input that matches only if the entity is not
+   one of the given values."
+  [& inputs]
+  (except inputs))
 
+(defn one-of
+  "Create transition input that matches only if the entity is in
+   the given sequence."
+  [inputs]
+  (vector :one-of
+          (set inputs)))
+
+(defn one-of*
+  "Create transition input that matches only if the entity is one 
+   of the given values."
+  [& inputs]
+  (except inputs))
+
+(def ^:const eps [:epsilon])
+
+;; ### Target State Shorthands
+
+(defprotocol ^:private TargetStates
+  (target->set [t]
+    "Convert target state representation into target state set."))
+
+(extend-protocol TargetStates
+  clojure.lang.IPersistentSet
+  (target->set [t]
+    t)
+  java.lang.Object
+  (target->set [t]
+    #{t})
+  nil
+  (target->set [t]
+    #{}))
+
+(def reject! 
+  "Get Reject State."
+  (constantly s/reject!))
+
+(def accept! 
+  "Get Accept State."
+  (constantly s/accept!))
+
+;; ### Generator
+
+(defn- generate-fsm-transitions
+  "Generate FSM Transitions from a seq of [input target] pairs where `input`
+   is a vector (consisting of `:one-of`, `:except`, `:literal`, `:epsilon`,  
+   `:any` and others, as well as additional data when needed) and `target` is a 
+   set of destination states.
+  
+   Transitions are processed in order which only has significance for `:any`
+   (all remaining transitions will be ignored), as well as `:except` transition
+   which cannot override or extend previously set targets.
+   "
+  [fsm src-state pairs]
+  (loop [fsm fsm
+         handled-inputs #{}
+         any-inputs #{t/any}
+         pairs pairs]
+    (if-not (seq pairs)
+      (reduce 
+        #(add-transition %1 src-state %2 s/reject!)
+        fsm
+        any-inputs)
+      (let [[[input target] & rst] pairs
+            [k data] (if (keyword? input) [input] input)
+            add-tr (fn [fsm i]
+                     (add-transition-set fsm src-state i target))]
+        (case k
+          :literal (recur (add-tr fsm data) 
+                          (conj handled-inputs data)
+                          any-inputs 
+                          rst)
+          :one-of  (recur (reduce add-tr fsm data) 
+                          (set (concat data handled-inputs))
+                          any-inputs 
+                          rst)
+          :epsilon (recur (add-tr fsm epsi) 
+                          (conj any-inputs epsi)
+                          any-inputs 
+                          rst)
+          :except (let [inputs-to-handle (filter 
+                                           (comp not (set (concat handled-inputs data)))
+                                           any-inputs)]
+                    (recur (reduce add-tr fsm inputs-to-handle)
+                           (set (concat inputs-to-handle handled-inputs))
+                           (set (filter (comp not handled-inputs) data))
+                           rst))
+          :any (if (seq any-inputs)
+                 (reduce add-tr fsm any-inputs)
+                 fsm)
+          (recur fsm handled-inputs any-inputs rst))))))
+
+(defn- normalize-fsm-transitions
+  "Resolve shorthands in input/target pairs destined for `generate-fsm-transitions`."
+  [pairs]
+  (map
+    (fn [[input target]]
+      (vector
+        (input->vector input)
+        (target->set target)))
+    pairs))
+
+(defn- generate-state
+  "Generate new state in FSM based on a state name and a list of transition pairs to
+   be eventually processed by `generate-fsm-transitions`. If there is already a state
+   with the given name, it will possibly be overwritten."
+  [{:keys[states] :as fsm} state pairs]
+  (let [pairs (normalize-fsm-transitions pairs)]
+    (generate-fsm-transitions fsm state pairs)))
+
+;; ### FSM Directives
+
+(defmulti extend-fsm
+  "An FSM is created using a sequence of directives like the following:
+
+     [:state  :s ...]
+     [:accept :a ...]
+     ...
+
+  This function takes one such directive and applies it to an FSM. To implement
+  new directives, one has to implement this multimethod, as well as `form->directive`."
+  (fn [k & _]
+    k))
+
+(defmethod extend-fsm :state
+  [_ fsm s t]
+  (-> fsm
+    (generate-state s t)))
+
+(defmethod extend-fsm :accept
+  [_ fsm s t]
+  (-> fsm
+    (generate-state s t)
+    (accept-in s)))
+
+(defmethod extend-fsm :reject
+  [_ fsm s t]  
+  (-> fsm
+    (generate-state s t)
+    (reject-in s)))
+
+(defmethod extend-fsm nil
+  [_ fsm & _]
+  fsm)
+
+(defn extend-fsm-with-directives
+  "Extend FSM by applying the given directives sequentially."
+  [fsm & directives]
+  (reduce
+    (fn [fsm [k & r]]
+      (apply extend-fsm k fsm r))
+    fsm
+    directives))
+
+(defmulti ^:private form->directive
+  "Convert a form like
+
+     (:state :s 0 -> :q)
+
+   into its directive representation, e.g.:
+
+     [:state :s [[0 :q]]]
+
+   To add new directives one has to implement this multimethod, as well as
+   `extend-fsm`."
+  (fn [[k & _]]
+    k)
+  :default :state)
+
+(defn- normalize-transitions
+  "Convert 'fancy' transitions to a normalize vector, e.g.
+
+    (normalize-transitions :x [0 -> :a 1 -> :b])
+
+   will yield:
+
+    [[0 :a] [1 :b]]
   "
-  [type k & transitions]
+  [state transitions]
   (letfn [(is-underscore? [x]
             (and (symbol? x) (= (name x) "_")))
           (is-arrow? [x]
             (and (symbol? x) (= (name x) "->")))
           (resolve-input [i]
-            (if (coll? i)
-              (let [[d & args] i]
-                (cond (= d :not) `(t/except ~@args)
-                      (= d :or) `(t/one-of ~@args)
-                      :else i))
-              (if (is-underscore? i) 
-                `t/any
-                i)))
+            (if (is-underscore? i) 
+              `[:literal t/any]
+              i))
           (resolve-destination [d]
-            (cond (is-underscore? d) k
-                  (= d :accept!) `s/accept!
-                  (= d :reject!) `s/reject!
+            (cond (is-underscore? d) `(hash-set ~state)
                   :else d))]
-
     (if (and (pos? (count transitions)) (< (count transitions) 3))
       (e/transition-missing-arrow "" (first transitions))
       (doseq [[i arrow _] (partition 3 transitions)]
         (when-not (is-arrow? arrow)
           (e/transition-missing-arrow "" i))))
+    `(vector
+       ~@(map
+           (fn [[input _ to]]
+             (vector (resolve-input input)
+                     (resolve-destination to)))
+           (partition 3 transitions)))))
 
-    `(mapcat vec
-       (t/resolve-transitions 
-         (vector ~@(mapcat 
-                     (fn [[input arrow next-state]]
-                       (vector (resolve-input input)
-                               (resolve-destination next-state)))
-                     (partition 3 transitions)))
-         ~(if (= :dfa type) `dfa-combine `nfa-combine)))))
+(defmethod form->directive :state
+  [[k state & transitions]]
+  [k state (normalize-transitions state transitions)])
 
-;; ## NFA/DFA generation
-;;
-;; Generation is done by supplying the states to use:
-;;
-;;     (nfa
-;;       (:state :init
-;;         \a -> :a
-;;         \b -> :b)
-;;       (:state :b 
-;;         \a -> _)
-;;       (:accept :a))
-;;       
-;; This will expand to
-;;
-;;     (-> 
-;;       (nfa*
-;;         [:init \a :a \b :b]
-;;         [:b \a :b])
-;;       (accept-in :a))
-;;
-;; Similarly for DFAs.
+;; ## FSM Generator Macros
 
-(defmacro new-fsm
-  "Create new FSM based on the given type and a series of states."
-  [type & states]
-  (let [create-fsm (case type
-                     :nfa `nfa*
-                     :dfa `dfa*
-                     `dfa*)
-        accept-state? (fn [[k & _]] 
-                        (= k :accept))
-        state-lists (map (fn [[_ s & t]]
-                           `(list* ~s (state* ~type ~s ~@t))) states)
-        accept-states `(accept-in ~@(->> 
-                                      (filter accept-state? states)
-                                      (map second)))]
-  `(->
-     (~create-fsm
-        ~@state-lists)
-      ~accept-states)))
+(defmacro fsm*
+  "Create FSM using a base FSM and a series of directives."
+  [base & directives]
+  `(extend-fsm-with-directives ~base
+     ~@(map form->directive directives)))
+
+(defmacro epsilon-nfa
+  "Create new e-NFA using the given directives."
+  [& directives]
+  `(fsm* (epsilon-nfa*) ~@directives))
 
 (defmacro nfa
-  "Create NFA from series of states."
-  [& states]
-  `(new-fsm :nfa ~@states))
+  "Create new NFA using the given directives."
+  [& directives]
+  `(fsm* (nfa*) ~@directives))
 
 (defmacro dfa
-  "Create DFA from series of states."
-  [& states]
-  `(new-fsm :dfa ~@states))
+  "Create new DFA using the given directives."
+  [& directives]
+  `(fsm* (dfa*) ~@directives))
+
+(defmacro def-epsilon-nfa
+  "Define new e-NFA."
+  [id & directives]
+  `(def ~id (epsilon-nfa ~@directives)))
+
+(defmacro def-nfa
+  "Define new NFA."
+  [id & directives]
+  `(def ~id (nfa ~@directives)))
+
+(defmacro def-dfa
+  "Define new DFA."
+  [id & directives]
+  `(def ~id (dfa ~@directives)))
