@@ -459,11 +459,11 @@
 (defn- normalize-transitions
   "Convert 'fancy' transitions to a normalized vector, e.g.
 
-    (normalize-transitions :x [0 -> :a 1 -> :b])
+    (normalize-transitions :x '(0 -> :a 1 -> :b 2 -> _))
 
    will yield:
 
-    [[0 :a] [1 :b]]
+    [[0 :a] [1 :b] [2 :x]]
   "
   [state transitions]
   (letfn [(is-underscore? [x]
