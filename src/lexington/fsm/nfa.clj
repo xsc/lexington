@@ -7,19 +7,9 @@
 
 ;; ## Structure
 ;;
-;; An NFA can have multiple target states for a single input, which are
-;; represented as sets in the transition table. Epsilon Transitions are
-;; allowed (represented by nil input)
-
-(defn nfa-reject-state?
-  "Is the default reject state?"
-  [state-set]
-  (= #{c/reject!} state-set))
-
-(defn nfa-accept-state?
-  "Is the default accept state?"
-  [state-set]
-  (= #{c/accept!} state-set))
+;; An NFA can have multiple target states for a single input. The two
+;; types of NFAs (epsilon-NFA and pure NFA) differ only in their input alphabet,
+;; the former being allowed to have `lexington.fsm.consts/epsi` transitions.
 
 ;; ## NFA Combination
 
@@ -141,9 +131,7 @@
         (assoc :accept closure-accept)
         (assoc :initial (closure-state-map initial))
         (assoc :transitions closure-trans)
-        (fsm-reindex
-          nfa-reject-state?
-          nfa-accept-state?)))))
+        (fsm-reindex)))))
 
 ;; ## NFA to DFA
 
@@ -174,7 +162,7 @@
               (assoc :initial initial-states)
               (assoc :accept (set (filter accepting-state? states)))
               (assoc :transitions transitions)
-              (fsm-reindex #(= #{c/reject!} %) #(= #{c/accept!} %)))
+              (fsm-reindex))
             (let [next-transitions (map get-transitions remaining-states)
                   next-states (->>
                                 (mapcat vals next-transitions)
