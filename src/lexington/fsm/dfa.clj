@@ -11,14 +11,6 @@
 ;;
 ;; DFAs have a single destination state for each state and input.
 
-(defn dfa-reject-state?
-  [s]
-  (= s #{c/reject!}))
-
-(defn dfa-accept-state?
-  [s]
-  (= s #{c/accept!}))
-
 ;; ## Simple Transformations
 
 (defn- prepare-fsm
