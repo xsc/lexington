@@ -355,10 +355,13 @@
             add-tr (fn [fsm i]
                      (add-transition-set fsm src-state i target))]
         (case k
-          :literal (recur (add-tr fsm data) 
-                          (conj handled-inputs data)
-                          any-inputs 
-                          rst)
+          :literal (if-not (= data c/any)
+                     (recur (add-tr fsm data) 
+                            (conj handled-inputs data)
+                            any-inputs 
+                            rst)
+                     (recur fsm handled-inputs any-inputs 
+                            (concat [[[:any] target]] rst)))
           :one-of  (recur (reduce add-tr fsm data) 
                           (set (concat data handled-inputs))
                           any-inputs 
@@ -377,7 +380,7 @@
           :any (if (seq any-inputs)
                  (reduce add-tr fsm any-inputs)
                  fsm)
-          (recur fsm handled-inputs any-inputs rst))))))
+          (e/error "Unknown FSM Transition Input: " input " (Target: " target ")"))))))
 
 (defn- normalize-fsm-transitions
   "Resolve shorthands in input/target pairs destined for `generate-fsm-transitions`."
