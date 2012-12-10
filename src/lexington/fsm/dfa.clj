@@ -47,7 +47,7 @@
                            (fn [table [e to]]
                              (let [to (first to)
                                    tt (or (table to) {})]
-                               (->> { e [from] }
+                               (->> { e #{from} }
                                  (merge-with (comp set concat) tt)
                                  (assoc table to))))
                            table t))
@@ -56,6 +56,7 @@
     (-> fsm 
       (assoc :transitions rtransitions)
       (assoc :accept #{initial})
+      (assoc :type :nfa)
       (multi-nfa->dfa accept))))
 
 ;; ## Cartesian Product
