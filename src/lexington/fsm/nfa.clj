@@ -14,9 +14,10 @@
 ;; ## NFA Combination
 
 (defn- nfa-add-epsilon 
+  "Convert given NFA to epsilon-NFA and add given transition."
   [nfa from to]
   (-> nfa
-    (assoc :type :e-nfa)
+    (fsm-set-epsilon-nfa-type)
     (add-transition from c/epsi to)))
 
 (defn loop-nfa
@@ -136,7 +137,7 @@
 ;; ## NFA to DFA
 
 (defn multi-nfa->dfa
-  "Convert NFA to DFA using multiple initial states by creating 'set-states' and transitions between them."
+  "Convert (non-epsilon!) NFA to DFA using multiple initial states by creating 'set-states' and transitions between them."
   [{:keys[accept transitions] :as fsm} initial-states]
   (if (and (= (count initial-states) 1) (dfa? fsm))
     fsm

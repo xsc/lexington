@@ -22,45 +22,6 @@
 ;; more than one element it's `:nfa`; otherwise the FSM is a `:dfa`. All lexington operations will 
 ;; adjust the type of the FSM when needed.
 
-
-;; ### Validation of FSM Types
-
-(defmulti validate-fsm-type
-  "Check if an FSM has the format its type requires."
-  (fn [{:keys[type]}]
-    type)
-  :default :e-nfa)
-
-(defmethod validate-fsm-type :e-nfa
-  [{:keys[transitions]}]
-  true)
-
-(defmethod validate-fsm-type :nfa
-  [fsm]
-  (not (some #(= % c/epsi) (fsm-alphabet fsm))))
-
-(defmethod validate-fsm-type :dfa
-  [{:keys[transitions]}]
-  (->>
-    (vals transitions)
-    (mapcat vals)
-    (map count)
-    (some #(> % 1))
-    not))
-
-(defn fsm-type
-  "Derive FSM type from structure of FSM."
-  [fsm]
-  (letfn [(is-fsm? [t]
-            (when (-> fsm
-                    (assoc :type t)
-                    validate-fsm-type)
-              t))]
-    (or 
-      (is-fsm? :dfa)
-      (is-fsm? :nfa)
-      (is-fsm? :e-nfa))))
-
 ;; ### Add Transition
 
 (defmulti add-fsm-transition
@@ -153,6 +114,7 @@
     ...
     (x [:a 0 :a 1 :b]
        [:b 1 :b])
+    ;; => { :type :x ... }
   "
   [type]
   (let [initial-fsm (-> {}
@@ -165,24 +127,36 @@
   (fn [& transitions]
     (add-transitions initial-fsm transitions))))
 
-;; ### e-NFA/NFA/DFA
+;; ### e-NFA/NFA/DFA + Hierarchy
 
 (def epsilon-nfa*
   "Create new epsilon-NFA."
   (fsm-creator :e-nfa))
 
 (defn epsilon-nfa?
-  [{:keys[type]}]
-  (= type :e-nfa))
+  "Is the FSM an epsilon-NFA?"
+  [fsm]
+  true)
+
+(defn fsm-set-epsilon-nfa-type
+  "Set type of FSM to epsilon-NFA if it is of a compatible type."
+  [fsm]
+  (assoc fsm :type :e-nfa))
 
 (def nfa*
   "Create new non-epsilon NFA."
   (fsm-creator :nfa))
 
-(def nfa?
-  "Is the FSM a non-epsilon-NFA?
-   Note that DFAs are NFAs to."
-  (comp not epsilon-nfa?))
+(defn nfa?
+  [{:keys[type]}]
+  "Is the FSM a non-epsilon-NFA?"
+  (or (= type :nfa) (= type :dfa)))
+
+(defn fsm-set-nfa-type
+  "Set type of FSM to NFA if it is of a compatible type."
+  [fsm]
+  (when (nfa? fsm)
+    (assoc fsm :type :nfa)))
 
 (def dfa*
   "Create new DFA."
@@ -191,6 +165,12 @@
 (defn dfa?
   [{:keys[type]}]
   (= type :dfa))
+
+(defn fsm-set-dfa-type
+  "Set type of FSM to DFA if it is of a compatible type."
+  [fsm]
+  (when (dfa? fsm)
+    (assoc fsm :type :dfa)))
 
 ;; ### Common Operations
 
