@@ -37,73 +37,78 @@
 
 ;; ## Hopcroft Minimization
 ;;
-;; P := {F, Q \ F};
-;; W := {F};
-;; while (W is not empty) do
-;;   choose and remove a set A from W
-;;   for each c in ∑ do
-;;     let X be the set of states for which a transition on c leads to a state in A
-;;     for each set Y in P for which X ∩ Y is nonempty do
-;;       replace Y in P by the two sets X ∩ Y and Y \ X
-;;       if Y is in W
-;;         replace Y in W by the same two sets
-;;       else
-;;         if |X ∩ Y| <= |Y \ X|
-;;           add X ∩ Y to W
-;;         else
-;;           add Y \ X to W
-;;     end;
-;;   end;
-;; end;
+;;     def hopcroft() :
+;;       P = {Q−F, F}
+;;       L = {F}
+;;       while L != {}:
+;;         S = extract(L)
+;;         for a in ∑:
+;;           for B in P:
+;;             (B1,B2) = split(B, S, a)
+;;             P = P \ {B}; P = P ∪ {B1, B2}
+;;             if |B1| < |B2|:
+;;               L = L ∪ {B1}
+;;             else:
+;;               L = L ∪ {B2}
+;;       return P;
 ;;
-;; see: [Wikipedia](http://en.wikipedia.org/wiki/DFA_minimization#Hopcroft.27s_algorithm)
+;; The `split` function will be realised in `hopcroft-split`:
+;;
+;;     split(B', a, B) = ({q in B'|q leads to a state in B using a},
+;;                        {q in B'|q does not lead to a state in B using a})
+;;
 
-(defn- find-source-states
-  "Find all states that (given a transition table) end up in a given state when 
-   presented with a specific input."
-  [transitions input dest-states]
-  (mapcat
-    (fn [dest]
-      (map first
-        (filter (fn [[from t]]
-                  (contains? (or (t input) (t c/any) #{c/reject!}) dest))
-                transitions)))
-    dest-states))
-
-(defn- generate-next-step
-  "Execution of Hopcroft's algorithm for one input character's source state set."
-  [partitions indicators source-states]
-  (let [src (set source-states)]
+(defn hopcroft-split
+  "Split a given set of states (`p-set`) into those that lead into one of another set 
+   of states (`dest-set`) given a specific trigger (`input`). Returns a two-element 
+   vector where the first element is a set of states that match the given condition 
+   and the second one a set of those that don't."
+  [transitions p-set input dest-set]
+  (let [dest? (set dest-set)]
     (reduce
-      (fn [[p i] px]
-        (let [iset (sets/intersection px src)]
-          (if (empty? iset)
-            (vector (conj p px) i)
-            (let [dset (sets/difference px src)]
-              (vector
-                (sets/union #{iset dset} p)
-                (cond (i px) (sets/union #{iset dset} i)
-                      (<= (count iset) (count dset)) (conj i iset)
-                      :else (conj i dset)))))))
-      [#{} (set indicators)]
-      partitions)))
+      (fn [[m n] s]
+        (let [matches? (when-let [t (get transitions s)]
+                         (when-let [d (or (first (or (t input) (t c/any))) c/reject!)]
+                           (dest? d)))]
+          (if matches?
+            (vector (conj m s) n)
+            (vector m (conj n s)))))
+      [#{} #{}]
+      p-set)))
 
-(defn- create-partitions
-  "Create partitions of state space based on equivalency classes."
-  [{:keys[transitions accept reject states]}]
-  (let [alphabet (mapcat (comp keys second) transitions)]
-    (loop [partitions (hash-set accept reject (set (filter (comp not (sets/union accept reject)) states)))
-           indicators (hash-set accept reject)]
-      (if-not (seq indicators)
-        (filter (comp not empty?) partitions)
-        (let [a (first indicators)
-              rst (disj indicators a)
-              [p i] (reduce 
-                      (fn [[p i] input]
-                        (generate-next-step p i (find-source-states transitions input a)))
-                      [partitions rst]
+(defn hopcroft-refine-partitions
+  "Refine the given partitions using Hopcroft's algorithm. Expects a normalized DFA."
+  [P L {:keys[transitions] :as dfa}]
+  (let [hsplit (partial hopcroft-split transitions)
+        alphabet (fsm-alphabet dfa)
+        conj-not-empty (fn [s e] 
+                         (if (empty? e) 
+                           s 
+                           (conj s e)))]
+    (loop [P (set P)
+           L (set L)]
+      (if-not (seq L)
+        P
+        (let [S (first L)
+              L (disj L S)
+              [P L] (reduce
+                      (fn [[P L] a]
+                        (reduce
+                          (fn [[P L] B]
+                            (let [[B1 B2] (hsplit B a S)]
+                              (vector
+                                (-> P
+                                  (disj B)
+                                  (conj-not-empty B1)
+                                  (conj-not-empty B2))
+                                (-> L
+                                  (conj-not-empty
+                                    (if (< (count B1) (count B2)) B1 B2))))))
+                          [P L]
+                          P))
+                      [P L]
                       alphabet)]
-          (recur p i))))))
+          (recur P L))))))
 
 (defn- rename-transitions
   "Based on a rename map generated from equivalency classes, clean up the
@@ -125,23 +130,33 @@
 
 (defmethod minimize-dfa :hopcroft
   [fsm & _]
-  (let [{:keys[states accept initial transitions] :as fsm} (fsm-normalize (nfa->dfa fsm))
-        partitions (create-partitions fsm)
-        partition-map (zipmap partitions
-                              (for [i (range)] (keyword (str "q" i))))
-        rename-map (->
-                     (reduce
-                       (fn [m [p n]]
-                         (reduce #(assoc %1 %2 n) m p))
-                       {}
-                       partition-map)
-                     (assoc c/reject! c/reject!))
-        new-transitions (rename-transitions rename-map transitions)
-        minimized-fsm (-> {}
-                        (assoc :states (set (map rename-map states)))
-                        (assoc :accept (set (map rename-map accept)))
-                        (assoc :initial (rename-map initial))
-                        (assoc :transitions (rename-transitions rename-map transitions)))]
-    (->
-      minimized-fsm
-      fsm-remove-dead-states)))
+  (let [{:keys[accept reject states initial transitions] :as dfa} (-> fsm nfa->dfa fsm-normalize)
+        accept? (set accept)
+        reject? (set reject)
+
+        ;; Create Partitions
+        accept-states (set accept)
+        other-states (sets/difference (set states) accept-states)
+        partitions (hopcroft-refine-partitions 
+                     #{accept-states other-states}
+                     #{accept-states}
+                     dfa)
+
+        ;; Rename States
+        partition-names (zipmap partitions (map #(keyword (str "q" %)) (range)))
+        rename-state (->>
+                       (mapcat
+                         (fn [[p q]]
+                           (let [q (if (or (contains? p c/reject!) 
+                                           (some reject? p))
+                                     c/reject!
+                                     q)]
+                             (map #(vector % q) p)))
+                         partition-names)
+                       (into {}))]
+    (-> (dfa*)
+      (assoc :initial (rename-state initial))
+      (assoc :states  (set (vals partition-names)))
+      (assoc :accept  (set (map rename-state accept)))
+      (assoc :reject  (set (map rename-state reject)))
+      (assoc :transitions (rename-transitions rename-state transitions)))))
