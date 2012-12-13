@@ -116,13 +116,17 @@
   [rename-map transitions]
   (reduce
     (fn [m [from tt]]
-      (let [n (rename-map from)]
+      (let [n (rename-map from)
+            any-target (rename-map (or (first (tt c/any)) c/reject!))]
         (if (m n)
           m
           (->>
             (reduce
               (fn [tt [e to]]
-                (assoc tt e (set (map rename-map to))))
+                (let [to (rename-map (first to))]
+                  (if (and (not (= e c/any)) (= to any-target))
+                    tt
+                    (assoc tt e #{to}))))
               {} tt)
             (assoc m n)))))
     {}
