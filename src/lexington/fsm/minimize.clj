@@ -160,7 +160,7 @@
                        (into {}))]
     (-> (dfa*)
       (assoc :initial (rename-state initial))
-      (assoc :states  (set (vals partition-names)))
+      (assoc :states  (set (vals rename-state)))
       (assoc :accept  (set (map rename-state accept)))
       (assoc :reject  (set (map rename-state reject)))
       (assoc :transitions (rename-transitions rename-state transitions)))))

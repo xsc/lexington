@@ -48,12 +48,21 @@
 ;; ## FSM Transition Analysis
 
 (defn fsm-next-states
-  "Get set of states directly reachable from a given state."
+  "Get set of states directly reachable from a given state (ordered by input entity). "
   [{:keys[states transitions reject]} src-state]
   (set
     (when-not (contains? reject src-state)
       (when-let [state-transitions (transitions src-state)]
-        (apply concat (vals state-transitions))))))
+        (letfn [(c [s1 s2]
+                  (cond (coll? s1) (recur (first s1) s2)
+                        (coll? s2) (recur s1 (first s2))
+                        (or (= s1 c/any) (= s1 c/epsi)) 1
+                        (or (= s2 c/any) (= s2 c/epsi)) -1
+                        :else (try
+                                (compare s1 s2)
+                                (catch Exception e)
+                                (finally 0))))]
+          (mapcat second (sort-by identity c state-transitions)))))))
 
 (defn fsm-destination-states
   "Get set of states that are reached in the given FSM when receiving the
@@ -253,7 +262,9 @@
       ([fsm f] (fsm-reindex fsm f default-reject? default-accept?))
       ([fsm r? a?] (fsm-reindex fsm default-rename r? a?))
       ([{:keys[accept states transitions initial] :as fsm} f r? a?]       
-       (let [state-map (zipmap 
+       (let [r? #(or (= % c/reject!) (r? %))
+             a? #(or (= % c/accept!) (a? %))
+             state-map (zipmap 
                          (->>
                            (fsm-reachable-state-seq fsm initial)
                            (filter #(not (or (r? %) (a? %)))))
@@ -265,3 +276,20 @@
                    (a? s) c/accept!
                    :else (let [i (state-map s)]
                            (f s i))))))))))
+
+;; ## FSM Equality
+
+(defn- reindex-normalize
+  "Normalize, then reindex FSM."
+  [fsm]
+  (-> fsm
+    (fsm-reindex)
+    (fsm-normalize)))
+
+(defn fsm-equal?
+  "Will check if two given FSMs have the same transitions between states."
+  [f1 f2]
+  (let [ri #(-> % fsm-reindex fsm-normalize)]
+    (= (ri f1) (ri f2))))
+
+
