@@ -17,7 +17,7 @@
   "
   (fn [dfa & {:keys[algorithm]}] 
     algorithm)
-  :default :brz)
+  :default :hopcroft)
 
 ;; ## Brzozowski Minimization
 ;;
