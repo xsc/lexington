@@ -23,10 +23,8 @@
   (:accept :q3 \b -> _))
 
 (deftest minimize-given-dfa
-  (testing "Hopcroft Minimization on given DFA."
-    (let [F (minimize-dfa D :algorithm :hopcroft)]
-      (is (fsm-equal? F Dmin))))
-  (testing "Brzozowski Minimization on given DFA."
-    (let [F (minimize-dfa D :algorithm :brz)]
-      (is (fsm-equal? F Dmin)))))
+  (testing "Minimization of given DFA."
+    (are [a] (fsm-equal? Dmin (minimize-dfa D :algorithm a))
+      :hopcroft
+      :brz)))
 
