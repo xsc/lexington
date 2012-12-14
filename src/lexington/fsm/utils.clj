@@ -62,7 +62,9 @@
                                 (compare s1 s2)
                                 (catch Exception e)
                                 (finally 0))))]
-          (mapcat second (sort-by identity c state-transitions)))))))
+          (mapcat 
+            (comp #(sort c %) second) 
+            (sort-by first c state-transitions)))))))
 
 (defn fsm-destination-states
   "Get set of states that are reached in the given FSM when receiving the
