@@ -48,9 +48,9 @@
 ;; ## FSM Transition Analysis
 
 (defn fsm-next-states
-  "Get set of states directly reachable from a given state (ordered by input entity). "
+  "Get vector of states directly reachable from a given state (ordered by input entity). "
   [{:keys[states transitions reject]} src-state]
-  (set
+  (distinct
     (when-not (contains? reject src-state)
       (when-let [state-transitions (transitions src-state)]
         (letfn [(c [s1 s2]
