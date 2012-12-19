@@ -66,12 +66,21 @@
             (comp #(sort c %) second) 
             (sort-by first c state-transitions)))))))
 
+(defn fsm-next-state-set
+  "Get set of states directly reachable from a given state."
+  [{:keys [states transitions reject]} src-state]
+  (set
+    (when-not (contains? reject src-state)
+      (when-let [state-transitions (transitions src-state)]
+        (reduce concat (vals state-transitions))))))
+
 (defn fsm-destination-states
   "Get set of states that are reached in the given FSM when receiving the
    given input in the given state."
   [{:keys[states transitions reject]} src-state input]
-  (set
-    (when-not (contains? reject src-state)
+  (if (or (= src-state c/reject!) (contains? reject src-state))
+    #{src-state}
+    (set
       (when-let [state-transitions (transitions src-state)]
         (or (state-transitions input) (state-transitions c/any) #{c/reject!})))))
 
