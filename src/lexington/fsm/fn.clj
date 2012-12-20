@@ -144,7 +144,7 @@
   "Generate a function that will return the matched prefix of the given input sequence. An
    optional `:match` parameter can be supplied that will be passed to `prefix-match-count-fn`."
   [fsm & {:keys [matcher]}]
-  (let [prefix-matcher (prefix-match-count-fn fsm :matcher match)]
+  (let [prefix-matcher (prefix-match-count-fn fsm :matcher matcher)]
     (fn [input-seq]
       (when-let [c (prefix-matcher input-seq)]
         (take c input-seq)))))
