@@ -92,7 +92,7 @@
 ;; state matching the given predicate.
 
 (defn-normalized count-fn
-  "Generate sequence producing a lazy sequence of the number (not index) of elements consumed
+  "Generate function producing a lazy sequence of the number (not index) of elements consumed
    where the NFA ended up in at least one state matching the given predicate."
   [nfa p?]
   (fn [input-seq]
