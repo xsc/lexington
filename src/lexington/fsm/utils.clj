@@ -147,8 +147,8 @@
   "Get set of states unreachable from a given root state."
   ([fsm] (fsm-unreachable-states fsm (:initial fsm)))
   ([{:keys[states] :as fsm} root]
-   (let [reachable? (set (fsm-reachable-states fsm root))]
-     (filter (comp not reachable?) states))))
+   (let [reachable? (fsm-reachable-states fsm root)]
+     (set (filter (comp not reachable?) states)))))
 
 (defn fsm-dead-states
   "Get set of non-accepting states that only lead to other non-accepting states."
@@ -209,8 +209,7 @@
    states from the FSM!"
   [{:keys[reject] :as fsm}]
   (-> fsm
-    (assoc :reject (set (concat reject (fsm-dead-states fsm))))
-    fsm-normalize
+    (fsm-remove-states (set (fsm-dead-states fsm)))
     (fsm-remove-unreachable-states)))
 
 ;; ## Rename States
