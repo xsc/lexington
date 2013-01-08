@@ -33,6 +33,13 @@
   [fsm & _]
   (-> fsm
     reverse-dfa
+    reverse-dfa
+    fsm-normalize))
+
+(defmethod minimize-dfa :brz-unnormalized
+  [fsm & _]
+  (-> fsm
+    reverse-dfa
     reverse-dfa))
 
 ;; ## Hopcroft Minimization

@@ -36,20 +36,23 @@
                      set))))
 
 (defn reverse-dfa
-  "Create a DFA that does accept the reverse inputs of the original DFA. This is done
-   by reversing all the FSM's transitions, setting the initial state to accepting and
+  "Create a DFA that does accept the reverse inputs of the original NFA (yes, NFA). This is 
+   done by reversing all the FSM's transitions, setting the initial state to accepting and
    then producing a DFA using all the original accepting states as initial ones."
   [fsm]
-  (let [{:keys[transitions initial accept states] :as fsm} (prepare-fsm fsm)
+  (let [{:keys[transitions initial accept states] :as fsm} (n/epsilon-nfa->nfa fsm)
         rtransitions (reduce
                        (fn [table [from t]]
                          (reduce
-                           (fn [table [e to]]
-                             (let [to (first to)
-                                   tt (or (table to) {})]
-                               (->> { e #{from} }
-                                 (merge-with (comp set concat) tt)
-                                 (assoc table to))))
+                           (fn [table [e dests]]
+                             (reduce
+                               (fn [table to]
+                                 (let [tt (or (table to) {})
+                                       from (if (= to c/reject!) c/reject! from)]
+                                   (->> { e #{from} }
+                                     (merge-with (comp set concat) tt)
+                                     (assoc table to))))
+                               table dests))
                            table t))
                        {}
                        transitions)]
