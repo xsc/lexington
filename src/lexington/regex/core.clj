@@ -29,8 +29,8 @@
   (let [c (count sq)]
     (cond (zero? c) nil
           (= c 1) (->
-                    (fsm/dfa* [:q0 (first sq) :q0])
-                    (fsm/accept-in :q0))
+                    (fsm/dfa* [:q0 (first sq) :q1])
+                    (fsm/accept-in :q1))
           :else (let [state-names (state-name-seq (inc c))
                       transitions (map (fn [[from to] [in _]]
                                          (vector from in to))
