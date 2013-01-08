@@ -1,8 +1,8 @@
 (ns ^{ :doc "Token Reader creation functions for `lexer' macro."
        :author "Yannick Scherer" }
-  lexington.token-readers
+  lexington.lexer.token-readers
   (:use lexington.tokens
-        lexington.seq-matchers))
+        lexington.lexer.seq-matchers))
 
 ;; ---------------------------------------------------------------
 ;; Handlers for Directives
@@ -35,12 +35,16 @@
   "Converts a lexer rule sequence into a normalized representation, where each
    sequence element is a (<directive> ...) list."
   [rules]
-  (lazy-seq
-    (when (seq rules)
+  (loop [rules rules
+         result []]
+    (if-not (seq rules)
+      result
       (let [[f & rst] rules]
-        (if (coll? f) 
-          (cons f (normalize-rules rst))
-          (cons (cons :token (take 2 rules)) (normalize-rules (rest rst))))))))
+        (if (coll? f)
+          (recur rst
+                 (conj result f))
+          (recur (rest rst) 
+                 (conj result (list* :token (take 2 rules)))))))))
 
 (defn create-token-readers
   "Create sequence of token reader functions."

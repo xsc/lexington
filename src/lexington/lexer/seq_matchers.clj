@@ -1,6 +1,6 @@
 (ns ^{ :doc "Seq Matcher Utilities."
        :author "Yannick Scherer" }
-  lexington.seq-matchers)
+  lexington.lexer.seq-matchers)
 
 ;; ## Protocol `Matchable`
 

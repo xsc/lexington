@@ -1,8 +1,8 @@
 (ns ^{ :doc "Lexington Lexer Implementation."
        :author "Yannick Scherer" }
-  lexington.lexer
+  lexington.lexer.core
   (:use lexington.tokens
-        lexington.token-readers))
+        lexington.lexer.token-readers))
 
 ;; ## Lexers
 ;;

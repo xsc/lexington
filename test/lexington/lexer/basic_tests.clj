@@ -1,5 +1,5 @@
 (ns lexington.lexer.basic-tests
-  (:use lexington.lexer
+  (:use lexington.lexer.core
         lexington.tokens
         clojure.test))
 
