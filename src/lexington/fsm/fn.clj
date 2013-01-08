@@ -130,11 +130,11 @@
    - `:non-greedy`: match as little as possible
    - `:total`: return the total number of matchable sub-sequences.
   "
-  [fsm & {:keys[matcher]}]
+  [fsm & {:keys[match]}]
   (let [prefix-counter (prefix-count-fn fsm)]
     (fn [input-seq]
       (when-let [prefix-counts (prefix-counter input-seq)]
-        (case matcher
+        (case match
           :non-greedy (first prefix-counts)
           :total (count prefix-counts)
           :greedy (last prefix-counts)
@@ -142,9 +142,14 @@
 
 (defn prefix-match-fn
   "Generate a function that will return the matched prefix of the given input sequence. An
-   optional `:match` parameter can be supplied that will be passed to `prefix-match-count-fn`."
-  [fsm & {:keys [matcher]}]
-  (let [prefix-matcher (prefix-match-count-fn fsm :matcher matcher)]
+   optional parameter, either `:greedy` or `:non-greedy`, can be supplied that will be passed 
+   to `prefix-match-count-fn`."
+  ([fsm] (prefix-match-fn fsm :greedy))
+  ([fsm match]
+   (let [match (if (or (= match :greedy) (= match :non-greedy))
+                 match
+                 :greedy)
+         prefix-matcher (prefix-match-count-fn fsm :match match)]
     (fn [input-seq]
       (when-let [c (prefix-matcher input-seq)]
-        (take c input-seq)))))
+        (take c input-seq))))))
