@@ -13,6 +13,8 @@
 
 ;; ## Building Regular Expressions
 
+;; ### Helpers
+
 (defn- state-name-seq
   "Create lazy seq of state names `:q0`, `:q1`, ... using the given range
    (specified exactly as if using `range`)."
@@ -21,6 +23,22 @@
     (fn [i]
       (keyword (str "q" i)))
     (apply range range-args)))
+
+(def ^:private rx-special-characters
+  (set "[]()+*?"))
+
+(defn rx-escape
+  "Escape special Regular Expression characters in a String."
+  [s]
+  (->> s
+    (mapcat
+      (fn [c]
+        (if (contains? rx-special-characters c)
+          [\\ c]
+          [c])))
+    (apply str)))
+
+;; ### Builders
 
 (defn rx-literal
   "Create DFA from seq, using each element as an transition input. The resulting
@@ -46,7 +64,20 @@
                               transitions)
                             (fsm/initial-state (first state-names))
                             (fsm/accept-in (last state-names)))]
-                  (Regex. (apply str sq) dfa)))))
+                  (Regex. (rx-escape sq) dfa)))))
+
+(defn rx-choice
+  "Create DFA that accepts a single input element: any element of the given seq."
+  [sq]
+  (Regex.
+    (str "[" (rx-escape sq) "]")
+    (->
+      (reduce 
+        (fn [dfa in]
+          (fsm/add-transition dfa :q0 in :q1))
+        (fsm/dfa*)
+        (distinct sq))
+      (fsm/accept-in :q1))))
 
 (defn rx-concat
   "Concatenate a number of regular expressions."
@@ -136,3 +167,6 @@
   "Find first match for the given matcher in the given sequence."
   [matcher sq]
   (first (rx-matcher-find-all matcher sq)))
+
+;; ## Regex DSL
+
