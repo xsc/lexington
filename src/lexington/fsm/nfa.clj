@@ -71,6 +71,7 @@
         (-> nfa
           (assoc :states (set (concat (:states nfa) states)))
           (assoc :accept (set (concat (:accept nfa) accept)))
+          (assoc :reject #{})
           (assoc :transitions (merge (:transitions nfa) transitions))
           (nfa-add-epsilon ix initial)))
       { :initial ix }

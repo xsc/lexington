@@ -51,26 +51,26 @@
   [& rxs]
   (let [n (apply nfa/concat-nfa (map :nfa rxs))
         p (apply str (map :pattern rxs))]
-    (Regex. p  (nfa/epsilon-nfa->nfa n))))
+    (Regex. p n)))
 
 (defn rx-union
   "Create union of a number of regular expressions."
   [& rxs]
   (let [n (apply nfa/union-nfa (map :nfa rxs))
-        p (string/join "|" (map :pattern rxs))]
-    (Regex. p (nfa/epsilon-nfa->nfa n))))
+        p (str "(" (string/join "|" (map :pattern rxs)) ")")]
+    (Regex. p n)))
 
 (defn rx-plus
   "Create regular expression that will accept the given one at least once."
   [{:keys[pattern nfa]}]
   (Regex. (str "(" pattern ")+") 
-          (nfa/epsilon-nfa->nfa (nfa/loop-nfa nfa))))
+          (nfa/loop-nfa nfa)))
 
 (defn rx-star
   "Create regular expression that will accept the given one any number of times."
   [{:keys[pattern nfa]}]
   (Regex. (str "(" pattern ")*") 
-          (nfa/epsilon-nfa->nfa (nfa/loop0-nfa nfa))))
+          (nfa/loop0-nfa nfa)))
 
 (defn rx-question-mark
   "Create regular expression that will accept the given one at most once."
@@ -94,7 +94,7 @@
   ([nfa] (rx-matcher nfa nil))
   ([{:keys[nfa]} match]
    (fsm-fn/prefix-match-count-fn 
-     nfa
+     (nfa/epsilon-nfa->nfa nfa)
      :match (if (or (= match :greedy) (= match :non-greedy))
               match
               :greedy))))
