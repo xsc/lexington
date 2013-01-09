@@ -98,3 +98,34 @@
       (is (not (m "Jolly good!")))
       (is (not (m "Hello you.")))
       (is (not (m "Hello you, you and you!"))))))
+
+(deftest find-tests
+  (testing "rx-matcher-all"
+    (let [m (rx-matcher (rx-union
+                          (rx-literal "Hello")
+                          (rx-literal "World")))]
+      (are [s r] (= (rx-matcher-all m s) r)
+           "Goodbye!" []
+           "Hello World" [[0 5] [6 5]]
+           "Hello, oh frightful World" [[0 5] [20 5]]
+           "Hello, Hello!" [[0 5] [7 5]])))
+  (testing "rx-matcher-find-all"
+    (let [m (rx-matcher (rx-union
+                          (rx-literal "Hello")
+                          (rx-literal "World")))]
+      (are [s r] (= (rx-matcher-find-all m s) (map seq r))
+           "Goodbye!" []
+           "Hello World" ["Hello" "World"]
+           "Hello, oh frightful World" ["Hello" "World"]
+           "Hello, Hello!" ["Hello" "Hello"])))
+  (testing "rx-matcher-find-first"
+    (let [m (rx-matcher (rx-union
+                          (rx-literal "Hello")
+                          (rx-literal "World")))]
+      (are [s r] (= (rx-matcher-find-first m s) (seq r))
+           "Goodbye!" nil
+           "Hello World" "Hello"
+           "Hello, oh frightful World" "Hello"
+           "Hello, Hello!" "Hello")))
+
+  )

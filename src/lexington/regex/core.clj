@@ -101,6 +101,22 @@
               match
               :greedy))))
 
+(defn rx-matcher-all
+  "Create lazy sequence of [position length] pairs detailing all matches for the given
+   matcher function in the given input seq."
+  [matcher sq]
+  (letfn [(lazy-find [sq pos]
+            (lazy-seq
+              (loop [sq sq
+                     pos pos]
+                (when (seq sq)
+                  (if-let [r (matcher sq)]
+                    (if (zero? r)
+                      (cons [pos 0] (lazy-find (rest sq) (inc pos)))
+                      (cons [pos r] (lazy-find (drop r sq) (+ r pos))))
+                    (recur (rest sq) (inc pos)))))))]
+    (lazy-find sq 0)))
+
 (defn rx-matcher-find-all
   "Create lazy sequence of results obtained by repeatedly applying the given matcher to
    different positions in the given seq. `sq` should be finite but might be lazy."
