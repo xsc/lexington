@@ -23,17 +23,20 @@
 
 (defn invert-dfa
   "Create a DFA that does accept everything not accepted by the given one. This
-   is done by switching the accepting states with all non-accepting states and replacing
-   the `reject!` state with the `accept!` one."
+   is done by making all non-accepting states accepting, replacing the `reject!` state
+   with the `accept!` one, and replacing all formerly accepting states with ``reject!`."
   [{:keys[accept states] :as dfa}]
-  (-> dfa
-    prepare-fsm
-    (fsm-rename-single-state c/reject! c/accept!)
-    (assoc :reject #{})
-    (assoc :accept (->> states
-                     (filter (comp not (set accept)))
-                     (cons c/accept!)
-                     set))))
+  (let [accept? (set accept)]
+    (-> dfa
+      prepare-fsm
+      (fsm-rename-single-state c/reject! c/accept!)
+      (fsm-rename-states #(when (accept? %) c/reject!))
+      (assoc-in [:transitions c/reject!] { c/any #{c/reject!} })
+      (assoc :reject #{})
+      (assoc :accept (->> states
+                       (filter (complement accept?))
+                       (cons c/accept!)
+                       set)))))
 
 (defn reverse-dfa
   "Create a DFA that does accept the reverse inputs of the original NFA (yes, NFA). This is 

@@ -4,7 +4,9 @@
   (:require [lexington.fsm.core :as fsm]
             [lexington.fsm.fn :as fsm-fn] 
             [lexington.fsm.nfa :as nfa]
-            [lexington.fsm.minimize :as m]
+            [lexington.fsm.dfa :as dfa :only [invert-dfa]]
+            [lexington.fsm.minimize :as m :only [minimize-dfa]]
+            [lexington.fsm.consts :as c :only [any]]
             [clojure.string :as string :only [join]]))
 
 ;; ## Regex Type
@@ -25,7 +27,7 @@
     (apply range range-args)))
 
 (def ^:private rx-special-characters
-  (set "[]()+*?"))
+  (set "[]()+*?^$"))
 
 (defn rx-escape
   "Escape special Regular Expression characters in a String."
@@ -77,6 +79,21 @@
           (fsm/add-transition dfa :q0 in :q1))
         (fsm/dfa*)
         (distinct sq))
+      (fsm/accept-in :q1))))
+
+(defn rx-not
+  "Create Regular Expression that accepts a single input element: any element that is not in the
+   given seq."
+  [sq]
+  (Regex.
+    (str "[^" (rx-escape (apply str sq)) "]")
+    (->
+      (reduce 
+        (fn [dfa in]
+          (fsm/add-transition dfa :q0 in c/reject!))
+        (fsm/dfa*)
+        (distinct sq))
+      (fsm/add-transition :q0 c/any :q1)
       (fsm/accept-in :q1))))
 
 (defn rx-concat
@@ -167,6 +184,3 @@
   "Find first match for the given matcher in the given sequence."
   [matcher sq]
   (first (rx-matcher-find-all matcher sq)))
-
-;; ## Regex DSL
-
