@@ -7,38 +7,14 @@
             [lexington.fsm.dfa :as dfa :only [invert-dfa]]
             [lexington.fsm.minimize :as m :only [minimize-dfa]]
             [lexington.fsm.consts :as c :only [any]]
-            [clojure.string :as string :only [join]]))
+            [clojure.string :as string :only [join]])
+  (:use lexington.regex.util))
 
 ;; ## Regex Type
 
 (defrecord Regex [pattern nfa])
 
 ;; ## Building Regular Expressions
-
-;; ### Helpers
-
-(defn- state-name-seq
-  "Create lazy seq of state names `:q0`, `:q1`, ... using the given range
-   (specified exactly as if using `range`)."
-  [& range-args]
-  (map
-    (fn [i]
-      (keyword (str "q" i)))
-    (apply range range-args)))
-
-(def ^:private rx-special-characters
-  (set "[]()+*?^$"))
-
-(defn rx-escape
-  "Escape special Regular Expression characters in a String."
-  [s]
-  (->> s
-    (mapcat
-      (fn [c]
-        (if (contains? rx-special-characters c)
-          [\\ c]
-          [c])))
-    (apply str)))
 
 ;; ### Builders
 
@@ -53,7 +29,7 @@
                     (->
                       (fsm/dfa* [:q0 (first sq) :q1])
                       (fsm/accept-in :q1)))
-          :else (let [state-names (state-name-seq (inc c))
+          :else (let [state-names (rx-state-name-seq (inc c))
                       transitions (map (fn [[from to] [in _]]
                                          (vector from in to))
                                        (partition 2 1 state-names)
@@ -129,6 +105,7 @@
           (fsm/accept-empty nfa)))
 
 (defn rx-minimize
+  "Minimize the Regular Expression's underlying NFA."
   [{:keys[pattern nfa]}]
   (Regex. pattern 
           (m/minimize-dfa nfa 
@@ -184,3 +161,76 @@
   "Find first match for the given matcher in the given sequence."
   [matcher sq]
   (first (rx-matcher-find-all matcher sq)))
+
+;; ## Regular Expression DSL
+;;
+;; Example: Matching String Literals "..." (with escape sequences)
+;;
+;;    (def str-rx (rx \" ([not \\ \"] | \\ [\\ \" \r \n \t]) * \"))
+;;    (def match-str (rx-matcher str-rx))
+;; 
+;;    (prn (match-str "\"\""))           ;= 2
+;;    (prn (match-str "\"abc\""))        ;= 5
+;;    (prn (match-str "\"abc\\\"def\"")) ;= 10
+;;    (prn (match-str "\"abc"))          ;= nil
+;;    (prn (match-str "\"abc\" def\""))  ;= 5
+
+(defn rx-expand
+  "Expand list of symbols/vectors/lists/characters into Regular Expression creation call:
+
+      \\x        -> (rx-literal [\\x])
+      [\\x]      -> (rx-choice [\\x])
+      [not \\x]  -> (rx-not [\\x])
+      ... *     -> (rx-star ...)
+      ... +     -> (rx-plus ...)
+      ... ?     -> (rx-question-mark ...)
+      ... | ... -> (rx-union (rx-expand ...) (rx-expand ...))
+  "
+  [sq]
+  (let [rx-rest (reduce
+                  (fn [r x]
+                    (cond (vector? x) (conj r
+                                            (let [[f & rst] x]
+                                              (if (symbol= f "not")
+                                                `(rx-not [~@rst])
+                                                `(rx-choice [~@x]))))
+                          (symbol? x) (condp symbol= x
+                                        "*" (conj (pop r) `(rx-star ~(last r)))
+                                        "+" (conj (pop r) `(rx-plus ~(last r)))
+                                        "?" (conj (pop r) `(rx-question-mark ~(last r))) 
+                                        (conj r `(rx-literal [~x])))
+                          (coll? x) (conj r (rx-expand x))
+                          :else (conj r `(rx-literal [~x]))))
+                  [] sq)]
+    (if (= (count rx-rest) 1) 
+      (first rx-rest)
+      `(rx-concat ~@rx-rest))))
+
+(defmacro rx 
+  "Create new Regular Expression object. The following constructs are supported:
+
+   - `... *` : match the previous expression any number of times (even not at all);
+   - `... +` : match the previous expression at least once;
+   - `... ?` : match the previous expression once or not at all;
+   - `... | ...` : match either one of the given sides;
+   - `[...]` : match any of the given input entities;
+   - `[not ...] : match none of the given input entities;
+   - `(...)` : group expressions together.
+
+   Example (a matcher for string literals):
+
+     (rx \\\" ([not \\\\ \\\"] | \\\\ [\\\\ \\\" \\r \\n \\t]) * \\\")
+
+   This is equivalent to the pattern:
+
+     #\"\\\"([^\\\\\\\"]|\\\\[\\\\\\\"rnt])*\\\"\"
+  "
+  [& args]
+  (let [parts (split-with (complement #(symbol= % "|")) args)
+        [a b] parts]
+    (cond (and (seq a) (seq b)) `(rx-union
+                                   (rx ~@(first parts))
+                                   (rx ~@(rest (second parts))))
+          (and (not (seq a)) (seq b)) `(rx ~@(rest b))
+          (and (not (seq a)) (not (seq b))) nil
+          :else (rx-expand a))))
