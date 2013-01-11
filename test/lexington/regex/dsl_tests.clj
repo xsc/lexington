@@ -63,14 +63,14 @@
 
          '((\a | \b) * \c * \d) 
          `(rx-concat
-                                   (rx-star (rx-union \a \b))
-                                   (rx-star \c)
-                                   \d)
+            (rx-star (rx-union \a \b))
+            (rx-star \c)
+            \d)
 
          '([\a \b] + [not \a \b] *) 
          `(rx-concat
-                                       (rx-plus (rx-choice [\a \b]))
-                                       (rx-star (rx-not [\a \b])))
+            (rx-plus (rx-choice [\a \b]))
+            (rx-star (rx-not [\a \b])))
 
          '("either: " ([0 1] + | [\a \b] +))
          `(rx-concat 
