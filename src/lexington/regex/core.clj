@@ -263,7 +263,7 @@
 (defmulti rx-expand 
   "Expand list of symbols/vectors/lists/characters into Regular Expression creation call:
 
-      \\x        -> (rx-literal [\\x])
+      \\x        -> \\x
       [\\x]      -> (rx-choice [\\x])
       [not \\x]  -> (rx-not [\\x])
       ... *      -> (rx-star ...)
@@ -299,17 +299,19 @@
         (rx-expand b)
       (and (not a) (not b)) 
          nil
-      :else `(rx-concat
-               ~@(reduce
-                   (fn [r x]
-                     (if (symbol? x)
-                       (condp symbol= x
-                         "*" (conj (pop r) `(rx-star ~(last r)))
-                         "+" (conj (pop r) `(rx-plus ~(last r)))
-                         "?" (conj (pop r) `(rx-question-mark ~(last r)))
-                         (conj r (rx-expand x)))
-                       (conj r (rx-expand x))))
-                   [] sq)))))
+      :else (let [r (reduce
+                      (fn [r x]
+                        (if (symbol? x)
+                          (condp symbol= x
+                            "*" (conj (pop r) `(rx-star ~(last r)))
+                            "+" (conj (pop r) `(rx-plus ~(last r)))
+                            "?" (conj (pop r) `(rx-question-mark ~(last r)))
+                            (conj r (rx-expand x)))
+                          (conj r (rx-expand x))))
+                      [] sq)]
+              (if (= (count r) 1)
+                (first r)
+                `(rx-concat ~@r))))))
 
 (defmacro rx 
   "Create new Regular Expression object. The following constructs are supported:
