@@ -11,7 +11,8 @@
 
 (deftest rx-literal-tests
   (testing "rx-literal"
-    (let [{:keys[pattern nfa]} hello]
+    (let [pattern (pattern hello)
+          nfa (regex->nfa hello)]
       (is (= pattern "Hello"))
       (is (= (count (:states nfa)) 6))
       (is (= (count (:accept nfa)) 1))
@@ -32,7 +33,9 @@
 
 (deftest rx-concat-tests
   (testing "rx-concat"
-    (let [{:keys[pattern nfa]} (rx-concat hello world)]
+    (let [hello-world (rx-concat hello world)
+          pattern (pattern hello-world)
+          nfa (regex->nfa hello-world)]
       (is (= pattern "HelloWorld"))
       (is (= (count (:states nfa)) 12))
       (is (= (count (:accept nfa)) 1))
@@ -57,7 +60,9 @@
 
 (deftest rx-union-tests
   (testing "rx-union"
-    (let [{:keys[pattern nfa]} (rx-union hello world)]
+    (let [hello-or-world (rx-union hello world)
+          pattern (pattern hello-or-world)
+          nfa (regex->nfa hello-or-world)]
       (is (= pattern "(Hello|World)"))
       (is (= (count (:states nfa)) 13))
       (is (= (count (:accept nfa)) 2))
@@ -75,7 +80,9 @@
 
 (deftest rx-repeat-tests
   (testing "rx-plus"
-    (let [{:keys[pattern nfa]} (rx-plus hello)]
+    (let [hello+ (rx-plus hello)
+          pattern (pattern hello+)
+          nfa (regex->nfa hello+)]
       (is (= pattern "(Hello)+"))
       (is (= (count (:states nfa)) 6))
       (is (= (count (:accept nfa)) 1))
@@ -85,7 +92,9 @@
       (doseq [q (:accept nfa)]
         (is (= (get-in nfa [:transitions q c/epsi]) #{(:initial nfa)})))))
   (testing "rx-star"
-    (let [{:keys[pattern nfa]} (rx-star hello)]
+    (let [hello* (rx-star hello)
+          pattern (pattern hello*)
+          nfa (regex->nfa hello*)]
       (is (= pattern "(Hello)*"))
       (is (= (count (:states nfa)) 6))
       (is (= (count (:accept nfa)) 2))
@@ -97,7 +106,9 @@
         (when-not (= q (:initial nfa))
           (is (= (get-in nfa [:transitions q c/epsi]) #{(:initial nfa)}))))))
   (testing "rx-question-mark"
-    (let [{:keys[pattern nfa]} (rx-question-mark hello)]
+    (let [hello? (rx-question-mark hello)
+          pattern (pattern hello?)
+          nfa (regex->nfa hello?)]
       (is (= pattern "(Hello)?"))
       (is (= (count (:states nfa)) 6))
       (is (= (count (:accept nfa)) 2))
