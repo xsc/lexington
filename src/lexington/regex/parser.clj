@@ -90,5 +90,4 @@
   (let [s (cond (= (class s) java.util.regex.Pattern)  (rx-unescape (str s))
                 (string? s) s
                 :else (throw (Exception. (str "expects string or pattern as parameter; given: " s))))]
-    `(-> ~(rx-expand (rx-seq (seq s)))
-       (assoc :pattern ~s))))
+    (rx-expand (rx-seq (seq s)))))
