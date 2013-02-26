@@ -207,3 +207,37 @@
                         state (next-state :after token state)]
                     (cons token (lazy-handle (rest token-seq) state))))))]
       #(-> (lex %) (lazy-handle initial-state)))))
+
+;; ### Allow for Erroneous Input
+
+(defn allow-partial-input
+  "End execution of the lexer once an Exception is thrown."
+  [lex]
+  (fn [in-seq]
+    (let [sq (lex in-seq)]
+      (letfn [(lazy-try-catch [sq]
+                (lazy-seq
+                  (try
+                    (when (seq sq)
+                      (when-let [x (first sq)]
+                        (cons x (lazy-try-catch (rest sq)))))
+                    (catch Exception _ nil))))]
+        (lazy-try-catch sq)))))
+
+(defn recover-from-error
+  "Recover from input that cannot be recognized."
+  [lex]
+  (fn [in-seq]
+    (letfn [(lazy-try-catch [in-seq token-seq]
+              (lazy-seq
+                (try
+                  (when (seq token-seq)
+                    (when-let [x (first token-seq)]
+                      (cons x (lazy-try-catch
+                                (drop (token-length x) in-seq)
+                                (rest token-seq)))))
+                  (catch Exception _ 
+                    (lazy-try-catch
+                      (rest in-seq)
+                      (lex (rest in-seq)))))))]
+      (lazy-try-catch in-seq (lex in-seq)))))

@@ -22,7 +22,9 @@
    with-int
    generate
    generate-for
-   generate-stateful]
+   generate-stateful
+   allow-partial-input
+   recover-from-error]
 
   [lexington.lexer.seq-matchers
 
@@ -64,7 +66,9 @@
    (lazy-seq
      (when (seq s)
        (when-let [token (run-token-readers token-readers s pos)]
-         (cons token (run-lexer token-readers (drop (tk/token-length token) s) (inc pos))))))))
+         (cons token (run-lexer token-readers
+                                (drop (tk/token-length token) s) 
+                                (+ pos (tk/token-length token)))))))))
 
 (defn lexer-fn
   "Create a lexer function based on a sequence of token readers. When executed, it
