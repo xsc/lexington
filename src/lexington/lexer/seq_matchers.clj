@@ -58,7 +58,6 @@
   (max-token-length [s]
     (count s)))
 
-
 (def ^:dynamic *max-regex-token-length*
   "Maximum Length of Tokens resulting from Regex Application."
   255)
@@ -74,3 +73,36 @@
             (count r))))))
   (max-token-length [_]
     *max-regex-token-length*))
+
+;; ## Customize Matchers
+
+;; ### Restrict Token Length of a given Matcher
+
+(deftype MaxLengthRestrictionMatcher [m length]
+  Matchable
+  (matcher-for [_]
+    (matcher-for m))
+  (max-token-length [_] length))
+
+(defn max-length
+  "Restrict the length of a given Matcher."
+  [matcher length]
+  (MaxLengthRestrictionMatcher. matcher length))
+
+;; ### Require a minimum Token Length
+
+(deftype MinLengthRestrictionMatcher [m length]
+  Matchable
+  (matcher-for [_]
+    (let [f (matcher-for m)]
+      (fn [in-seq]
+        (when-let [r (f in-seq)]
+          (when-not (< r length)
+            r)))))
+  (max-token-length [_] 
+    (max-token-length m)))
+
+(defn min-length
+  "Set the minimum length of a given Matcher."
+  [matcher length]
+  (MinLengthRestrictionMatcher. matcher length))

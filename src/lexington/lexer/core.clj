@@ -22,7 +22,12 @@
    with-int
    generate
    generate-for
-   generate-stateful])
+   generate-stateful]
+
+  [lexington.lexer.seq-matchers
+
+   max-length
+   min-length])
 
 ;; ## Lexers
 ;;
@@ -34,11 +39,19 @@
 ;; Since the `lexer` macro basically just creates a series of trial-and-error token reader
 ;; functions, these helpers handle the actual application of those functions.
 
+(defn- throw-invalid-data
+  "Throw Exception when encountering invalid input data."
+  [s pos]
+  (throw 
+    (Exception. 
+      (str "invalid input data (at position " pos "): " (first s)))))
+
 (defn- run-token-readers
   "Run a sequence of token readers in order until one produces a non-nil value."
-  [token-readers s]
+  [token-readers s pos]
   (loop [r token-readers]
-    (when (seq r)
+    (if-not (seq r)
+      (throw-invalid-data s pos)
       (if-let [token ((first r) s)]
         token
         (recur (rest r))))))
@@ -46,11 +59,12 @@
 (defn- run-lexer
   "Run a sequence of token readers on a given input sequence, producing a lazy
    seq with the read tokens."
-  [token-readers s]
-  (lazy-seq
-    (when (seq s)
-      (when-let [token (run-token-readers token-readers s)]
-        (cons token (run-lexer token-readers (drop (tk/token-length token) s)))))))
+  ([token-readers s] (run-lexer token-readers s 0))
+  ([token-readers s pos]
+   (lazy-seq
+     (when (seq s)
+       (when-let [token (run-token-readers token-readers s pos)]
+         (cons token (run-lexer token-readers (drop (tk/token-length token) s) (inc pos))))))))
 
 (defn lexer-fn
   "Create a lexer function based on a sequence of token readers. When executed, it
