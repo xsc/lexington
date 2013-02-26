@@ -24,17 +24,6 @@
    generate-for
    generate-stateful])
 
-;; ## Customization
-
-(defmacro with-max-token-length
-  "Set the maximum length of tokens produced by a lexer call."
-  [n & body]
-  `(let [n# ~n]
-     (if (and (integer? n#) (pos? n#))
-       (binding [sqm/*max-token-length* n#]
-         ~@body)
-       (throw (Exception. "with-max-token-length expects a positive integer.")))))
-
 ;; ## Lexers
 ;;
 ;; A lexer is a function that takes a sequence of input entities (e.g. characters) and produces a 
@@ -57,23 +46,20 @@
 (defn- run-lexer
   "Run a sequence of token readers on a given input sequence, producing a lazy
    seq with the read tokens."
-  ([token-readers s] (run-lexer token-readers s sqm/*max-token-length*))
-  ([token-readers s max-token-length]
-   (lazy-seq
-     (when (seq s)
-       (when-let [token (with-max-token-length max-token-length
-                          (run-token-readers token-readers s))]
-         (cons token (run-lexer token-readers (drop (tk/token-length token) s) max-token-length)))))))
+  [token-readers s]
+  (lazy-seq
+    (when (seq s)
+      (when-let [token (run-token-readers token-readers s)]
+        (cons token (run-lexer token-readers (drop (tk/token-length token) s)))))))
 
 (defn lexer-fn
   "Create a lexer function based on a sequence of token readers. When executed, it
    will produce a lazy sequence of read tokens."
   [token-readers]
-  (fn [in-seq & {:keys[token-count token-length]}]
-    (let [max-token-length (or token-length sqm/*max-token-length*)]
-      (when-let [rsq (run-lexer token-readers in-seq max-token-length)]
+  (fn [in-seq & {:keys[token-count]}]
+      (when-let [rsq (run-lexer token-readers in-seq)]
         (cond token-count (take token-count rsq)
-              :else rsq)))))
+              :else rsq))))
 
 ;; ## Lexer Macro
 ;;

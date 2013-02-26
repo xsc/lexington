@@ -10,20 +10,21 @@
   (matcher-for [x]
     "Create function that matches a seq against the given entity. A matcher function 
      returns either nil (if no match was found) or the number of seq elements it
-     matches (might be zero)."))
+     matches (might be zero).")
+  (max-token-length [x]
+    "Get maximum length of resulting tokens. This also restricts the number of elements
+     passed to the function created by `matcher-for`."))
 
 ;; ## Matcher Generation
-
-(def ^:dynamic *max-token-length*
-  "Maximum number of elements a token can consist of."
-  255)
 
 (defn- wrap-matcher
   "Wrap a function to fulfill the token matcher function contract (return a positive
    number or nil)."
-  [f]
+  [f max-token-length]
   (fn [in-seq]
-    (let [sq (take *max-token-length* in-seq)]
+    (let [sq (if (and (integer? max-token-length) (pos? max-token-length))
+               (take max-token-length in-seq)
+               in-seq)]
       (when-let [r (f sq)]
         (when (and (integer? r) (pos? r))
           r)))))
@@ -32,15 +33,16 @@
   "Create a matcher function based on the given value that produces a positive 
    number or nil."
   [v]
-  (when-let [f (matcher-for v)]
-    (wrap-matcher f)))
+  (let [l (max-token-length v)]
+    (when-let [f (matcher-for v)]
+      (wrap-matcher f l))))
 
 ;; ## Predefined Matchers
 
 (extend-type clojure.lang.AFunction
   Matchable
-  (matcher-for [f]
-    (wrap-matcher f)))
+  (matcher-for [f] f)
+  (max-token-length [_] 0))
 
 (extend-type java.lang.String
   Matchable
@@ -52,7 +54,14 @@
             (let [msq (take c isq)]
               (when (= msq sq)
                 c)))))
-      (constantly 0))))
+      (constantly 0)))
+  (max-token-length [s]
+    (count s)))
+
+
+(def ^:dynamic *max-regex-token-length*
+  "Maximum Length of Tokens resulting from Regex Application."
+  255)
 
 (extend-type java.util.regex.Pattern
   Matchable
@@ -62,4 +71,6 @@
         (when-let [r (re-find re (apply str in-seq))]
           (if (coll? r)
             (count (first r))
-            (count r)))))))
+            (count r))))))
+  (max-token-length [_]
+    *max-regex-token-length*))
