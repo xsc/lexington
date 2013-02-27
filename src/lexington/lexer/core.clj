@@ -1,35 +1,8 @@
 (ns ^{ :doc "Lexington Lexer Implementation."
        :author "Yannick Scherer" }
   lexington.lexer.core
-
-  ;; Potemkin for Import
-  (:use [potemkin :only [import-vars]])
-
-  ;; Namespaces to import
   (:require [lexington.tokens :as tk]
-            [lexington.lexer.token-readers :as tr]
-            [lexington.lexer.seq-matchers :as sqm]
-            [lexington.lexer.utils :as u]))
-
-;; ## Import
-
-(import-vars
-  [lexington.lexer.utils
-   
-   discard
-   retain
-   with-string
-   with-int
-   generate
-   generate-for
-   generate-stateful
-   allow-partial-input
-   recover-from-error]
-
-  [lexington.lexer.seq-matchers
-
-   max-length
-   min-length])
+            [lexington.lexer.token-readers :as tr]))
 
 ;; ## Lexers
 ;;
@@ -75,9 +48,9 @@
    will produce a lazy sequence of read tokens."
   [token-readers]
   (fn [in-seq & {:keys[token-count]}]
-      (when-let [rsq (run-lexer token-readers in-seq)]
-        (cond token-count (take token-count rsq)
-              :else rsq))))
+    (when-let [rsq (run-lexer token-readers in-seq)]
+      (cond token-count (take token-count rsq)
+            :else rsq))))
 
 ;; ## Lexer Macro
 ;;

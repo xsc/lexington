@@ -1,5 +1,5 @@
 (ns lexington.lexer.util-tests
-  (:use lexington.lexer.core
+  (:use lexington.lexer
         lexington.tokens
         clojure.test
         [clojure.string :as string :only [split]]))
