@@ -1,7 +1,7 @@
 (ns ^{ :doc "FSM Visualization using Dorothy/GraphViz"
        :author "Yannick Scherer" }
   lexington.fsm.visualize
-  (:use dorothy.core
+  (:use [dorothy.core :as dorothy]
         [clojure.string :as string :only [join]]
         [lexington.fsm.consts :as c]
         lexington.fsm.utils))
@@ -99,7 +99,7 @@
                                { :label label })))))
                      (filter (comp not nil?))))))]
        (-> 
-         (graph
+         (dorothy/graph
            (concat
              [(graph-attrs { :rankdir "LR" })
               (node-attrs NODE_STYLE)
@@ -111,14 +111,20 @@
              [[init-node (node-name initial)]]
              (mapcat (fn [[from to]]
                        (generate-edges from to)) transitions)))
-         dot)))))
+         dorothy/dot)))))
 
 ;; ## Presentation Functions
 
 (defn show-fsm!
   "Open Dorothy Window to display the FSM."
   ([fsm] (show-fsm! fsm default-ignore-state?))
-  ([fsm ignore?] (show! (fsm->dot fsm ignore?))))
+  ([fsm ignore?] 
+   (when-let [g (fsm->dot fsm ignore?)]
+     (try
+       (dorothy/show! g)
+       (catch Exception e
+         (println "WARNING: Could not create Graph. Is GraphViz installed?")
+         (println "Exception:" (.getMessage e)))))))
 
 (defn show-fsm-all!
   "Open Dorothy Window to display the FSM, not ignoring any states."
@@ -132,4 +138,9 @@
     (save-fsm! fsm \"fsm.png\" { :format :png })
   "
   [fsm filename & options]
-  (apply save! (fsm->dot fsm) filename options))
+  (when-let [g (fsm->dot fsm)]
+    (try
+      (apply dorothy/save! g filename options)
+      (catch Exception e
+         (println "WARNING: Could not create Graph. Is GraphViz installed?")
+         (println "Exception:" (.getMessage e))))))
