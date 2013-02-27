@@ -79,7 +79,7 @@
 
 ;; ## Epsilon-NFA to NFA
 
-(defn epsilon-closure-state
+(defn- epsilon-closure-state
   "Get epsilon closure states by following all epsilon transitions and creating a set of
    the so-reached states."
   [transitions root]
@@ -91,7 +91,7 @@
                       (mapcat #(get-in transitions [% c/epsi]) next-states))]
         (recur (set (concat n visited)) n)))))
 
-(defn epsilon-closure-transitions
+(defn- epsilon-closure-transitions
   "Get epsilon closure transitions."
   [transitions alphabet closure-state-map]
   (reduce 

@@ -10,14 +10,22 @@
 
 ;; ## Minimization
 
-(defmulti minimize-dfa 
+(defmulti minimize-dfa* 
+  "Minimize the given DFA usign the specified algorithm:
+   - `:brz`: Brzozowski Minimization (default)
+   - `:hopcroft`: Hopcroft Minimization
+  "
+  (fn [dfa algorithm] 
+    algorithm)
+  :default :hopcroft)
+
+(defn minimize-dfa
   "Minimize the given DFA usign the specified `:algorithm`:
    - `:brz`: Brzozowski Minimization (default)
    - `:hopcroft`: Hopcroft Minimization
   "
-  (fn [dfa & {:keys[algorithm]}] 
-    algorithm)
-  :default :hopcroft)
+  [dfa & {:keys[algorithm]}]
+  (minimize-dfa* dfa algorithm))
 
 ;; ## Brzozowski Minimization
 ;;
@@ -29,14 +37,14 @@
 ;; __Note:__ `lexington.fsm.dfa/reverse-dfa` already creates a suitable DFA, so
 ;; this function is nothing else than said reversal applied twice."
 
-(defmethod minimize-dfa :brz
+(defmethod minimize-dfa* :brz
   [fsm & _]
   (-> fsm
     reverse-dfa
     reverse-dfa
     fsm-normalize))
 
-(defmethod minimize-dfa :brz-unnormalized
+(defmethod minimize-dfa* :brz-unnormalized
   [fsm & _]
   (-> fsm
     reverse-dfa
@@ -65,7 +73,7 @@
 ;;                        {q in B'|q does not lead to a state in B using a})
 ;;
 
-(defn hopcroft-split
+(defn- hopcroft-split
   "Split a given set of states (`p-set`) into those that lead into one of another set 
    of states (`dest-set`) given a specific trigger (`input`). Returns a two-element 
    vector where the first element is a set of states that match the given condition 
@@ -83,7 +91,7 @@
       [#{} #{}]
       p-set)))
 
-(defn hopcroft-refine-partitions
+(defn- hopcroft-refine-partitions
   "Refine the given partitions using Hopcroft's algorithm. Expects a normalized DFA."
   [P L {:keys[transitions] :as dfa}]
   (let [hsplit (partial hopcroft-split transitions)
@@ -139,7 +147,7 @@
     {}
     transitions))
 
-(defmethod minimize-dfa :hopcroft
+(defmethod minimize-dfa* :hopcroft
   [fsm & _]
   (let [{:keys[accept reject states initial transitions] :as dfa} (-> fsm nfa->dfa fsm-normalize)
         accept? (set accept)
