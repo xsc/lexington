@@ -1,6 +1,10 @@
 lexington
 =========
 
+__Please read:__ Since this project started, a lot of lexing/parsing libraries emerged, most of them doing the job better than lexington. 
+(Have a look at [instaparse](https://github.com/Engelberg/instaparse) and be amazed.) I will thus not continue working on
+this library, except for fixing issues that may arise.
+
 [![Build Status of Master](https://travis-ci.org/xsc/lexington.png?branch=master)](https://travis-ci.org/xsc/lexington)
 
 lexington is aimed at simplifying the creation of extensible and combinable lexers. Written in Clojure it offers a
